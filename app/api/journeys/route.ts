@@ -13,10 +13,10 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
 
-  // Auto-delete draft journeys older than 24 hours
+  // Auto-delete draft journeys not updated for 24 hours (prevents deletion of active journeys)
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   db.prepare(
-    "DELETE FROM journeys WHERE status = 'draft' AND created_at < ?"
+    "DELETE FROM journeys WHERE status = 'draft' AND updated_at < ?"
   ).run(twentyFourHoursAgo);
 
   if (activeOnly) {
