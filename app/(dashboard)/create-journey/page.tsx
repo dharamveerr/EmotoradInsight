@@ -60,9 +60,15 @@ export default function CreateJourneyPage() {
       console.log("Response status:", res.status);
 
       if (!res.ok) {
-        const errData = await res.json();
-        console.error("API Error:", errData);
-        alert(`Failed to load journey: ${errData.error || res.statusText}`);
+        let errMessage = res.statusText;
+        try {
+          const errData = await res.json();
+          errMessage = errData.error || errMessage;
+        } catch {
+          // If response is not JSON, use status text
+        }
+        console.error("API Error:", errMessage);
+        alert(`Failed to load journey: ${errMessage}`);
         return;
       }
 

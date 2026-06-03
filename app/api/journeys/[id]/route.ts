@@ -10,12 +10,17 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = params;
-  const db = getDb();
 
   try {
+    const db = getDb();
+
+    console.log("Fetching journey with ID:", id);
+
     const journey = db
       .prepare("SELECT * FROM journeys WHERE id = ?")
       .get(id) as any;
+
+    console.log("Query result:", journey);
 
     if (!journey) {
       return NextResponse.json({ error: "Journey not found" }, { status: 404 });
@@ -40,7 +45,7 @@ export async function GET(
   } catch (error) {
     console.error("Error fetching journey:", error);
     return NextResponse.json(
-      { error: "Failed to load journey" },
+      { error: `Failed to load journey: ${error instanceof Error ? error.message : String(error)}` },
       { status: 500 }
     );
   }
