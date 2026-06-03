@@ -15,6 +15,7 @@ export default function VariableUploadModal({
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -25,6 +26,26 @@ export default function VariableUploadModal({
       }
       setFile(selectedFile);
       setError(null);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch("/api/variables/template");
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "variables-template.csv";
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -70,6 +91,17 @@ export default function VariableUploadModal({
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {!result ? (
             <>
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={handleDownloadTemplate}
+                  disabled={downloading}
+                  className="flex-1 px-3 py-2 text-xs bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 transition-colors disabled:opacity-50 font-semibold"
+                  title="Download CSV template"
+                >
+                  {downloading ? "Downloading…" : "📥 Download Template"}
+                </button>
+              </div>
+
               <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center">
                 <input
                   type="file"
