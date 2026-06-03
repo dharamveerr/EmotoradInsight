@@ -54,31 +54,45 @@ export default function CreateJourneyPage() {
   async function loadJourney(id: string) {
     try {
       setSelectedJourneyId(id);
+      console.log("Loading journey:", id);
+
       const res = await fetch(`/api/journeys/${id}`);
+      console.log("Response status:", res.status);
+
       if (!res.ok) {
-        alert("Failed to load journey");
+        const errData = await res.json();
+        console.error("API Error:", errData);
+        alert(`Failed to load journey: ${errData.error || res.statusText}`);
         return;
       }
+
       const data = await res.json();
+      console.log("Journey data:", data);
+
       const journeyData = data.journey;
 
-      if (journeyData) {
-        setJourneyName(journeyData.name);
-        const fullJourney: Journey = {
-          id: journeyData.id,
-          name: journeyData.name,
-          description: journeyData.description,
-          steps: journeyData.structure?.steps || [],
-          status: journeyData.status,
-          published_at: journeyData.published_at,
-          created_at: journeyData.created_at,
-          updated_at: journeyData.updated_at,
-        };
-        setCurrentJourney(fullJourney);
+      if (!journeyData) {
+        console.error("No journey data in response");
+        alert("Journey not found");
+        return;
       }
+
+      setJourneyName(journeyData.name);
+      const fullJourney: Journey = {
+        id: journeyData.id,
+        name: journeyData.name,
+        description: journeyData.description || "",
+        steps: journeyData.structure?.steps || [],
+        status: journeyData.status,
+        published_at: journeyData.published_at,
+        created_at: journeyData.created_at,
+        updated_at: journeyData.updated_at,
+      };
+      console.log("Setting current journey:", fullJourney);
+      setCurrentJourney(fullJourney);
     } catch (error) {
       console.error("Error loading journey:", error);
-      alert("Error loading journey");
+      alert(`Error loading journey: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
