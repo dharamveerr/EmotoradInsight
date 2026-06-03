@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import getDb from "@/lib/db";
-import { JOURNEY_STEPS } from "@/lib/types";
+import { JOURNEY_STEPS, ChatbotEvent } from "@/lib/types";
+import { getPublishedTree, classifyEventsToTreeLeaves, getHeatmapData, getStepDistribution } from "@/lib/tree-reporting";
+import { classifyEventToTreeNode, getTreeLeaves, getTreeNodePath } from "@/lib/tree-evaluator";
 
 // Helper: returns SQL clause + params for optional date range filtering
 function df(from: string, to: string) {
@@ -22,6 +24,14 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
   const { clause: dc, p: dp } = df(from, to);
+
+  // Check if tree is published - if so, use tree-based reporting
+  const publishedTree = getPublishedTree();
+  if (publishedTree) {
+    return handleTreeBasedReporting(type, journey, from, to, dc, dp, db, publishedTree);
+  }
+
+  // Fallback to original hardcoded JOURNEY_STEPS logic if no tree published
 
   // ── OVERVIEW ──────────────────────────────────────────────────────────
   if (type === "overview") {
@@ -194,4 +204,163 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({ error: "Unknown type" }, { status: 400 });
+}
+
+/**
+ * Handle tree-based reporting
+ */
+function handleTreeBasedReporting(
+  type: string,
+  leafParam: string,
+  from: string,
+  to: string,
+  dc: string,
+  dp: string[],
+  db: any,
+  tree: any
+) {
+  const today = new Date().toISOString().slice(0, 10);
+  const dateFrom = from || today;
+  const dateTo = to || today;
+
+  // Get all events in date range
+  const dateClause = dc ? `WHERE ${dc}` : "";
+  const allEvents = db
+    .prepare(`SELECT * FROM events ${dateClause} ORDER BY timestamp`)
+    .all(...dp) as ChatbotEvent[];
+
+  // Classify events to tree leaves
+  const eventsByLeaf = classifyEventsToTreeLeaves(allEvents, tree);
+
+  if (type === "overview") {
+    const totalUsers = new Set(allEvents.map((e) => e.userId)).size;
+    const leaves = getTreeLeaves(tree);
+
+    const leafBreakdown = leaves.map((leaf) => {
+      const path = getTreeNodePath(leaf, tree);
+      const events = eventsByLeaf.get(path) || [];
+      const leafUsers = new Set(events.map((e) => e.userId)).size;
+      return {
+        segment: path,
+        users: leafUsers,
+        events: events.length,
+      };
+    });
+
+    const todaySessions = new Set(
+      allEvents.map((e) => e.userId)
+    ).size;
+
+    return NextResponse.json({
+      todaySessions,
+      activeJourneys: leaves.length,
+      completionRate: 0,
+      dropoffRate: 0,
+      last7Days: [],
+      journeyDist: leafBreakdown.map((lb) => ({
+        journey: lb.segment,
+        count: lb.users,
+      })),
+      journeyBreakdown: leafBreakdown,
+      isTreeBased: true,
+    });
+  }
+
+  if (type === "funnel") {
+    const leaves = getTreeLeaves(tree);
+    const selectedLeaf = leafParam
+      ? leaves.find((l) => getTreeNodePath(l, tree) === leafParam)
+      : leaves[0];
+
+    if (!selectedLeaf) {
+      return NextResponse.json({ funnel: [], isTreeBased: true });
+    }
+
+    const leafPath = getTreeNodePath(selectedLeaf, tree);
+    const leafEvents = eventsByLeaf.get(leafPath) || [];
+
+    const steps = new Map<string, number>();
+    for (const event of leafEvents) {
+      const count = steps.get(event.step) || 0;
+      steps.set(event.step, count + 1);
+    }
+
+    const funnel = Array.from(steps.entries()).map(([step, count]) => ({
+      step,
+      count,
+    }));
+
+    return NextResponse.json({
+      funnel,
+      leaf: leafPath,
+      isTreeBased: true,
+    });
+  }
+
+  if (type === "heatmap") {
+    const leaves = getTreeLeaves(tree);
+    const selectedLeaf = leafParam
+      ? leaves.find((l) => getTreeNodePath(l, tree) === leafParam)
+      : null;
+
+    const eventsToAnalyze = selectedLeaf
+      ? eventsByLeaf.get(getTreeNodePath(selectedLeaf, tree)) || []
+      : allEvents;
+
+    const heatmapData = getHeatmapData(eventsToAnalyze);
+
+    return NextResponse.json({
+      heatmap: heatmapData,
+      leaf: selectedLeaf ? getTreeNodePath(selectedLeaf, tree) : "all",
+      isTreeBased: true,
+    });
+  }
+
+  if (type === "dropoff") {
+    const leaves = getTreeLeaves(tree);
+    const selectedLeaf = leafParam
+      ? leaves.find((l) => getTreeNodePath(l, tree) === leafParam)
+      : leaves[0];
+
+    if (!selectedLeaf) {
+      return NextResponse.json({ dropoff: [], isTreeBased: true });
+    }
+
+    const leafPath = getTreeNodePath(selectedLeaf, tree);
+    const leafEvents = eventsByLeaf.get(leafPath) || [];
+
+    const steps = Array.from(
+      new Set(leafEvents.map((e) => e.step))
+    );
+
+    const dropoff = steps.map((step, i) => {
+      const entered = leafEvents.filter((e) => e.step === step).length;
+      const nextStep = steps[i + 1];
+      const nextCount = nextStep
+        ? leafEvents.filter((e) => e.step === nextStep).length
+        : 0;
+      const exited = entered - nextCount;
+      const dropRate =
+        entered > 0 ? Math.round((exited / entered) * 100) : 0;
+
+      return {
+        step,
+        entered,
+        exited: exited > 0 ? exited : 0,
+        dropRate,
+      };
+    });
+
+    return NextResponse.json({
+      dropoff,
+      leaf: leafPath,
+      isTreeBased: true,
+    });
+  }
+
+  // Default: return tree overview
+  return NextResponse.json({
+    error: "Unknown type",
+    isTreeBased: true,
+  });
 }
