@@ -65,7 +65,6 @@ export function getVariableByName(name: string): Variable | null {
  */
 export function createVariable(
   name: string,
-  type: string,
   description?: string
 ): Variable {
   const db = getDb();
@@ -73,10 +72,10 @@ export function createVariable(
   const now = new Date().toISOString();
 
   db.prepare(
-    "INSERT INTO variables (id, name, type, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-  ).run(id, name, type, description || null, now, now);
+    "INSERT INTO variables (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+  ).run(id, name, description || null, now, now);
 
-  return { id, name, type: type as any, description, created_at: now, updated_at: now };
+  return { id, name, description, created_at: now, updated_at: now };
 }
 
 /**
@@ -85,7 +84,6 @@ export function createVariable(
 export function updateVariable(
   id: string,
   name?: string,
-  type?: string,
   description?: string
 ): Variable | null {
   const db = getDb();
@@ -94,16 +92,15 @@ export function updateVariable(
 
   const now = new Date().toISOString();
   db.prepare(
-    "UPDATE variables SET name = ?, type = ?, description = ?, updated_at = ? WHERE id = ?"
+    "UPDATE variables SET name = ?, description = ?, updated_at = ? WHERE id = ?"
   ).run(
     name || existing.name,
-    type || existing.type,
     description !== undefined ? description : existing.description,
     now,
     id
   );
 
-  return { id, name: name || existing.name, type: (type || existing.type) as any, description: description !== undefined ? description : existing.description, created_at: existing.created_at, updated_at: now };
+  return { id, name: name || existing.name, description: description !== undefined ? description : existing.description, created_at: existing.created_at, updated_at: now };
 }
 
 /**

@@ -20,11 +20,11 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let { name, type, description } = await req.json();
+  let { name, description } = await req.json();
 
-  if (!name || !type) {
+  if (!name) {
     return NextResponse.json(
-      { error: "Missing required fields: name, type" },
+      { error: "Missing required field: name" },
       { status: 400 }
     );
   }
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const variable = createVariable(name, type, description);
+  const variable = createVariable(name, description);
   return NextResponse.json(variable, { status: 201 });
 }
 
@@ -50,13 +50,13 @@ export async function PUT(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id, name, type, description } = await req.json();
+  const { id, name, description } = await req.json();
 
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
-  const variable = updateVariable(id, name, type, description);
+  const variable = updateVariable(id, name, description);
   if (!variable) {
     return NextResponse.json({ error: "Variable not found" }, { status: 404 });
   }

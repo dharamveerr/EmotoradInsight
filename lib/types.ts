@@ -116,7 +116,6 @@ export type TreeConfig = {
 export type Variable = {
   id: string;
   name: string;
-  type: "string" | "number" | "boolean" | "select";
   description?: string;
   created_at: string;
   updated_at: string;

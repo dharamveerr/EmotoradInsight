@@ -17,7 +17,6 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
   const [search, setSearch] = useState("");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [newVarName, setNewVarName] = useState("");
-  const [newVarType, setNewVarType] = useState("string");
   const [newVarDesc, setNewVarDesc] = useState("");
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -36,15 +35,13 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newVarName,
-          type: newVarType,
-          description: newVarDesc,
+          description: newVarDesc || undefined,
         }),
       });
 
       if (res.ok) {
         mutate();
         setNewVarName("");
-        setNewVarType("string");
         setNewVarDesc("");
       }
     } finally {
@@ -114,27 +111,26 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
               }}
               className="p-2 bg-green-500/20 border border-green-500/30 rounded cursor-move hover:bg-green-500/30 transition-colors group"
             >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
+              <div className="flex justify-between items-start gap-2">
+                <div className="flex-1 min-w-0">
                   <p className="text-xs font-mono text-green-300 truncate">
                     {variable.name}
                   </p>
-                  <p className="text-xs text-gray-500">{variable.type}</p>
+                  {variable.description && (
+                    <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">
+                      {variable.description}
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => handleDeleteVariable(variable.id)}
                   disabled={deleting === variable.id}
-                  className="text-xs px-1 py-0.5 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                  className="text-xs px-1 py-0.5 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50 shrink-0"
                   title="Delete"
                 >
                   ✕
                 </button>
               </div>
-              {variable.description && (
-                <p className="text-xs text-gray-600 mt-1 line-clamp-1">
-                  {variable.description}
-                </p>
-              )}
               <p className="text-xs text-gray-600 text-center mt-1">⋮ drag</p>
             </div>
           ))
@@ -152,16 +148,6 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
           placeholder="e.g., @customer_name"
           className="w-full bg-white/10 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-green-500/40"
         />
-        <select
-          value={newVarType}
-          onChange={(e) => setNewVarType(e.target.value)}
-          className="w-full bg-white/10 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-green-500/40"
-        >
-          <option value="string">string</option>
-          <option value="number">number</option>
-          <option value="boolean">boolean</option>
-          <option value="select">select</option>
-        </select>
         <input
           type="text"
           value={newVarDesc}

@@ -37,16 +37,18 @@ export async function POST(req: NextRequest) {
                                firstLine.toLowerCase().includes("type");
 
       if (isStandardFormat) {
-        // Standard format: name,type,description
+        // Standard format: name,description
         lines.slice(1).forEach((line, idx) => {
-          const [name, type, description] = line.split(",").map((s) => s.trim());
-          if (!name || !type) {
-            errors.push(`Row ${idx + 2}: Missing name or type`);
+          const parts = line.split(",").map((s) => s.trim());
+          const name = parts[0];
+          const description = parts[1];
+          if (!name) {
+            errors.push(`Row ${idx + 2}: Missing name`);
             return;
           }
           // Ensure @ prefix
           const varName = name.startsWith("@") ? name : "@" + name;
-          variables.push({ name: varName, type, description: description || undefined });
+          variables.push({ name: varName, description: description || undefined });
         });
       } else {
         // Auto-extract mode: scan all text for @keyword patterns
@@ -60,17 +62,16 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Convert to variables (default to string type)
+        // Convert to variables
         for (const keyword of uniqueKeywords) {
           variables.push({
             name: keyword,
-            type: "string",
             description: `Auto-extracted from CSV`
           });
         }
 
         if (uniqueKeywords.size === 0) {
-          errors.push("No @keyword patterns found in CSV. Expected format: text with @keyword references or CSV with 'name,type,description' header");
+          errors.push("No @keyword patterns found in CSV. Expected format: text with @keyword references or CSV with 'name,description' header");
         }
       }
     } else if (file.name.endsWith(".json")) {

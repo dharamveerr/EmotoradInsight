@@ -130,11 +130,13 @@ export default function VariableUploadModal({
                 <div>
                   <p className="font-semibold text-gray-400">Mode 1: CSV with header</p>
                   <code className="block bg-white/5 p-2 rounded text-xs">
-                    name,type,description
+                    name,description
                     <br />
-                    @customer_name,string,Customer name
+                    @customer_name,Name of customer
                     <br />
-                    @product_type,string,Product selected
+                    @product_type,Product selected
+                    <br />
+                    @price_range,Price range (optional)
                   </code>
                 </div>
 
@@ -153,7 +155,7 @@ export default function VariableUploadModal({
                 <code className="block bg-white/5 p-2 rounded text-xs">
                   [
                   <br />
-                  &nbsp;&nbsp;{"{ name: '@variable_name', type: 'string', ... }"}
+                  &nbsp;&nbsp;{"{ name: '@variable_name', description: '...' }"}
                   <br />
                   ]
                 </code>
