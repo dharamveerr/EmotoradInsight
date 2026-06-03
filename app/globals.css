@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #060b14;
+  --foreground: #e8edf4;
 }
 
 @theme inline {
@@ -12,15 +12,337 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in-scale {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+.animate-fade-in { animation: fade-in 0.5s ease-out both; }
+.animate-fade-in-scale { animation: fade-in-scale 0.4s ease-out both; }
+.animate-slide-in { animation: slide-in-left 0.4s ease-out both; }
+.animate-count { animation: count-up 0.6s ease-out both; }
+
+/* Stagger delays */
+.delay-1 { animation-delay: 0.05s; }
+.delay-2 { animation-delay: 0.1s; }
+.delay-3 { animation-delay: 0.15s; }
+.delay-4 { animation-delay: 0.2s; }
+.delay-5 { animation-delay: 0.25s; }
+
+/* Glass card */
+.glass {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+.glass-hover {
+  transition: all 0.3s ease;
+}
+.glass-hover:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(34, 197, 94, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(34, 197, 94, 0.1);
+}
+
+/* Skeleton shimmer */
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite linear;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(34,197,94,0.3); }
+
+/* Select dropdown dark */
+select option { background: #0f1a2a; color: #e8edf4; }
+
+/* Select positioning fix */
+select {
+  position: relative;
+  z-index: 10;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+select:focus {
+  z-index: 50;
+}
+
+/* Unified select style — use .select-glass on all journey dropdowns */
+@layer components {
+  .select-glass {
+    background: rgba(15, 26, 42, 0.6) !important;
+    border: 1px solid rgba(34, 197, 94, 0.25) !important;
+    border-radius: 12px !important;
+    padding: 10px 16px !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: #e8edf4 !important;
+    cursor: pointer !important;
+    outline: none !important;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
+    appearance: auto !important;
+    -webkit-appearance: auto !important;
+  }
+  .select-glass:focus {
+    border-color: rgba(34, 197, 94, 0.6) !important;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2) !important;
+    z-index: 50 !important;
+  }
+  html.light .select-glass {
+    background: rgba(255, 255, 255, 0.85) !important;
+    border-color: rgba(34, 197, 94, 0.35) !important;
+    color: #0f172a !important;
+  }
+}
+
+/* ============ CONTRAST BALANCE (dark mode) ============ */
+/* Large headline numbers — soften from pure white */
+body [class~="text-4xl"] { color: #dce5f0 !important; }
+
+/* Conversion/accent numbers (text-2xl bold) — slightly muted */
+body [class~="text-green-400"] { color: #3ecf6e !important; }
+body [class~="text-blue-400"]  { color: #52a4f7 !important; }
+body [class~="text-yellow-400"]{ color: #e8b800 !important; }
+body [class~="text-red-400"]   { color: #f06060 !important; }
+body [class~="text-emerald-400"]{ color: #2ec870 !important; }
+body [class~="text-orange-400"]{ color: #e07a30 !important; }
+
+/* Secondary/label text — stepped brightness, all more visible */
+body [class~="text-gray-300"] { color: #b8c5d6 !important; }
+body [class~="text-gray-400"] { color: #9fb0c4 !important; }
+body [class~="text-gray-500"] { color: #8498b0 !important; }
+body [class~="text-gray-600"] { color: #6e84a0 !important; }
+
+/* ============ LIGHT THEME ============ */
+html.light body { background: #f1f5f9; color: #0f172a; }
+html.light select option { background: #ffffff; color: #0f172a; }
+
+html.light .app-shell {
+  background: linear-gradient(135deg, #f8fafc, #eef2f7, #f8fafc) !important;
+}
+html.light .app-sidebar {
+  background: linear-gradient(to bottom, #ffffff, #f1f5f9) !important;
+  border-right-color: rgba(0,0,0,0.08) !important;
+}
+html.light .app-topbar {
+  background: rgba(255,255,255,0.75) !important;
+  border-bottom-color: rgba(0,0,0,0.08) !important;
+}
+
+html.light .glass {
+  background: #ffffff;
+  border-color: rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+html.light .skeleton {
+  background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
+  background-size: 1000px 100%;
+}
+html.light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+
+/* text + surface utility flips (attribute selectors, no escaping) */
+html.light [class~="text-white"] { color: #0f172a !important; }
+html.light [class~="text-gray-200"] { color: #1e293b !important; }
+html.light [class~="text-gray-300"] { color: #334155 !important; }
+html.light [class~="text-gray-400"] { color: #475569 !important; }
+html.light [class~="text-gray-500"] { color: #64748b !important; }
+html.light [class~="text-gray-600"] { color: #94a3b8 !important; }
+html.light [class~="bg-white/5"]  { background-color: rgba(0,0,0,0.04) !important; }
+html.light [class~="bg-white/10"] { background-color: rgba(0,0,0,0.06) !important; }
+html.light [class~="bg-white/3"]  { background-color: rgba(0,0,0,0.02) !important; }
+html.light [class~="border-white/5"]  { border-color: rgba(0,0,0,0.06) !important; }
+html.light [class~="border-white/10"] { border-color: rgba(0,0,0,0.1) !important; }
+html.light [class~="border-white/20"] { border-color: rgba(0,0,0,0.15) !important; }
+
+/* ── Light mode: accent text colours ── */
+html.light [class~="text-blue-300"]   { color: #1d4ed8 !important; }
+html.light [class~="text-blue-400"]   { color: #2563eb !important; }
+html.light [class~="text-green-300"]  { color: #15803d !important; }
+html.light [class~="text-green-400"]  { color: #16a34a !important; }
+html.light [class~="text-red-300"]    { color: #b91c1c !important; }
+html.light [class~="text-red-400"]    { color: #dc2626 !important; }
+html.light [class~="text-purple-300"] { color: #6d28d9 !important; }
+html.light [class~="text-purple-400"] { color: #7c3aed !important; }
+html.light [class~="text-orange-400"] { color: #c2410c !important; }
+html.light [class~="text-yellow-400"] { color: #a16207 !important; }
+html.light [class~="text-emerald-400"]{ color: #047857 !important; }
+html.light [class~="text-cyan-400"]   { color: #0e7490 !important; }
+html.light [class~="text-teal-400"]   { color: #0f766e !important; }
+
+/* ── Light mode: accent bg / border cards ── */
+html.light [class~="bg-blue-500/20"]   { background-color: rgba(59,130,246,0.1) !important; }
+html.light [class~="bg-blue-500/10"]   { background-color: rgba(59,130,246,0.07) !important; }
+html.light [class~="border-blue-500/30"]{ border-color: rgba(59,130,246,0.4) !important; }
+html.light [class~="border-blue-500/40"]{ border-color: rgba(59,130,246,0.5) !important; }
+
+html.light [class~="bg-green-500/20"]   { background-color: rgba(34,197,94,0.1) !important; }
+html.light [class~="bg-green-500/10"]   { background-color: rgba(34,197,94,0.07) !important; }
+html.light [class~="border-green-500/30"]{ border-color: rgba(34,197,94,0.45) !important; }
+html.light [class~="border-green-500/40"]{ border-color: rgba(34,197,94,0.55) !important; }
+
+html.light [class~="bg-red-500/20"]     { background-color: rgba(239,68,68,0.1) !important; }
+html.light [class~="border-red-500/30"] { border-color: rgba(239,68,68,0.4) !important; }
+
+html.light [class~="bg-purple-500/20"]  { background-color: rgba(168,85,247,0.1) !important; }
+html.light [class~="border-purple-500/30"]{ border-color: rgba(168,85,247,0.4) !important; }
+
+html.light [class~="bg-orange-500/20"]  { background-color: rgba(249,115,22,0.1) !important; }
+html.light [class~="bg-yellow-500/20"]  { background-color: rgba(234,179,8,0.1) !important; }
+html.light [class~="bg-emerald-500/10"] { background-color: rgba(16,185,129,0.07) !important; }
+
+/* ── Light mode: input/form fields ── */
+html.light input[class~="bg-white/10"],
+html.light textarea[class~="bg-white/10"] {
+  background-color: rgba(255,255,255,0.85) !important;
+  border-color: rgba(0,0,0,0.15) !important;
+  color: #1e293b !important;
+}
+html.light input::placeholder,
+html.light textarea::placeholder { color: #94a3b8 !important; }
+
+/* ── Light mode: glass cards need visible border ── */
+html.light .glass {
+  border-color: rgba(0,0,0,0.1) !important;
+}
+
+/* ============================================================
+   DARK / LIGHT VISIBILITY FIXES
+   Root cause: the global `text-white → dark` flip (and friends)
+   assume every surface flips light↔dark. Surfaces that stay dark
+   in both themes (modals, solid-colour buttons, login, popovers)
+   therefore end up with dark text on dark bg = invisible.
+   ============================================================ */
+
+/* --- Always-dark modal/popover surfaces must flip to a light surface
+       in light mode, so the globally-flipped (dark) text stays readable --- */
+html.light [class~="bg-gray-900"] { background-color: #ffffff !important; }
+html.light [class~="bg-gray-800"] { background-color: #f1f5f9 !important; }
+
+/* --- Solid / saturated colour buttons stay coloured in light mode,
+       so their white text must STAY white (must NOT flip to dark).
+       Two class tokens → higher specificity than the global flip. --- */
+html.light [class~="text-white"][class~="bg-green-500"],
+html.light [class~="text-white"][class~="bg-blue-500"],
+html.light [class~="text-white"][class~="bg-emerald-500"],
+html.light [class~="text-white"][class~="from-green-400"],
+html.light [class~="text-white"][class~="from-green-500"],
+html.light [class~="text-white"][class~="from-blue-500"],
+html.light [class~="text-white"][class~="from-emerald-500"],
+html.light [class~="text-white"][class~="from-orange-500"] {
+  color: #ffffff !important;
+}
+
+/* --- Heatmap empty-cell colour: theme-aware via CSS var (resolved inline) --- */
+:root { --heat-empty: rgba(255,255,255,0.03); }
+html.light { --heat-empty: rgba(0,0,0,0.05); }
+
+/* --- Recharts default tooltip: its inline dark bg keeps the inherited
+       (dark, in light mode) label text invisible — flip the surface --- */
+html.light .recharts-default-tooltip {
+  background: #ffffff !important;
+  border-color: rgba(0,0,0,0.12) !important;
+  color: #0f172a !important;
+}
+html.light .recharts-default-tooltip .recharts-tooltip-label { color: #0f172a !important; }
+
+/* --- Recharts grid lines (white-ish) are invisible on light cards --- */
+html.light .recharts-cartesian-grid line { stroke: rgba(0,0,0,0.08) !important; }
+
+/* --- Recharts axis tick labels: SVG fill overridden for light mode --- */
+html.light .recharts-cartesian-axis-tick-value { fill: #475569 !important; }
+html.light .recharts-legend-item-text { color: #475569 !important; }
+
+/* --- Sticky page control bar: theme-aware background (was inline dark) --- */
+.page-sticky-bar {
+  background: rgba(6, 11, 20, 0.92);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+html.light .page-sticky-bar {
+  background: rgba(241, 245, 249, 0.9) !important;
+  border-bottom-color: rgba(0,0,0,0.08) !important;
+}
+
+/* --- Sidebar collapse button (always-dark slate) → light in light mode --- */
+html.light .collapse-btn { background-color: #e2e8f0 !important; color: #475569 !important; }
+html.light .collapse-btn:hover { background-color: #cbd5e1 !important; color: #0f172a !important; }
+
+/* --- SelectGlass dropdown menu (inline dark) → light surface + readable items --- */
+html.light .select-glass-menu {
+  background: rgba(255,255,255,0.98) !important;
+  border-color: rgba(34,197,94,0.35) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(34,197,94,0.08) !important;
+}
+html.light .select-glass-menu li[aria-selected="false"] { color: #334155 !important; }
+
+/* --- Login page is intentionally always-dark: keep its dark styling
+       even when the rest of the app is in light mode --- */
+html.light .login-page .glass {
+  background: rgba(255,255,255,0.03) !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5) !important;
+}
+html.light .login-page [class~="text-white"] { color: #ffffff !important; }
+html.light .login-page [class~="text-gray-400"] { color: #94a3b8 !important; }
+html.light .login-page [class~="text-gray-500"] { color: #64748b !important; }
+html.light .login-page [class~="text-gray-600"] { color: #475569 !important; }
+html.light .login-page [class~="text-red-300"]  { color: #fca5a5 !important; }
+html.light .login-page [class~="bg-white/5"]  { background-color: rgba(255,255,255,0.05) !important; }
+html.light .login-page [class~="bg-white/10"] { background-color: rgba(255,255,255,0.1) !important; }
+html.light .login-page [class~="border-white/10"] { border-color: rgba(255,255,255,0.1) !important; }
+html.light .login-page [class~="border-white/15"] { border-color: rgba(255,255,255,0.15) !important; }
+html.light .login-page [class~="border-white/20"] { border-color: rgba(255,255,255,0.2) !important; }
+
+/* ── ProfileEditModal + PopOver dark surfaces → light in light mode ── */
+html.light [class~="bg-slate-900"] { background-color: #ffffff !important; }
+html.light [class~="bg-slate-800/50"] { background-color: rgba(248,250,252,0.85) !important; }
+html.light [class~="bg-slate-800"] { background-color: #f1f5f9 !important; }
+html.light [class~="bg-red-500/10"] { background-color: rgba(239,68,68,0.08) !important; }
+
+/* ── Dropdown menu full light mode support ── */
+html.light [class~="bg-slate-900"] { background-color: #ffffff !important; }
+html.light [class~="border-white/10"] { border-color: rgba(0,0,0,0.1) !important; }
+html.light [class~="border-white/5"] { border-color: rgba(0,0,0,0.05) !important; }
+html.light [class~="shadow-black/50"] { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1) !important; }
+html.light [class~="text-gray-300"] { color: #475569 !important; }
+html.light [class~="hover:bg-white/5"] { background-color: rgba(0,0,0,0.04) !important; }
+html.light [class~="hover:bg-white/5"]:hover { background-color: rgba(0,0,0,0.08) !important; }
+html.light [class~="hover:bg-red-500/10"] { background-color: rgba(239,68,68,0.05) !important; }
+html.light [class~="hover:bg-red-500/10"]:hover { background-color: rgba(239,68,68,0.12) !important; }
+html.light [class~="hover:text-white"] { color: #0f172a !important; }
+html.light [class~="hover:text-red-300"] { color: #dc2626 !important; }

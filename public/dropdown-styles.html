@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dropdown Styles Preview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .group:hover .group-hover\:block { display: block; }
+    details summary { list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-10 font-sans">
+  <h1 class="text-3xl font-bold text-gray-800 mb-2">Tailwind Dropdown Styles</h1>
+  <p class="text-gray-500 mb-10">Hover or click to open each dropdown</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+
+    <!-- 1. Basic hover dropdown -->
+    <div>
+      <p class="text-xs font-semibold text-gray-400 uppercase mb-2">1. Basic Hover</p>
+      <div class="relative inline-block group">
+        <button class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition">
+          Options ▾
+        </button>
+        <div class="hidden group-hover:block absolute left-0 mt-1 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profile</a>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</a>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Logout</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Rounded pill style -->
+    <div>
+      <p class="text-xs font-semibold text-gray-400 uppercase mb-2">2. Pill / Rounded</p>
+      <div class="relative inline-block group">
+        <button class="bg-purple-500 text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-purple-600 transition shadow">
+          Menu ▾
+        </button>
+        <div class="hidden group-hover:block absolute left-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-purple-100 z-10 overflow-hidden">
+          <a href="#" class="block px-4 py-2 text-sm text-purple-700 hover:bg-purple-50">Dashboard</a>
+          <a href="#" class="block px-4 py-2 text-sm text-purple-700 hover:bg-purple-50">Reports</a>
+          <a href="#" class="block px-4 py-2 text-sm text-purple-700 hover:bg-purple-50">Sign out</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Outlined / Ghost -->
+    <div>
+      <p class="text-xs font-semibold text-gray-400 uppercase mb-2">3. Outlined / Ghost</p>
+      <div class="relative inline-block group">
+        <button class="border-2 border-gray-400 text-gray-600 px-4 py-2 rounded-md text-sm font-medium hover:border-gray-700 hover:text-gray-800 transition bg-transparent">
+          Select ▾
+        </button>
+        <div class="hidden group-hover:block absolute left-0 mt-1 w-44 bg-white border-2 border-gray-300 rounded-md shadow-md z-10">
+          <a href="#" class="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">Item A</a>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">Item B</a>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">Item C</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Dark / Minimal -->
+    <div>
+      <p class="text-xs font-semibold text-gray-400 uppercase mb-2">4. Dark Minimal</p>
+      <div class="relative inline-block group">
+        <button class="bg-gray-900 text-white px-4 py-2 rounded text-sm font-medium hover:bg-gray-700 transition">
+          Actions ▾
+        </button>
+        <div class="hidden group-hover:block absolute left-0 mt-1 w-44 bg-gray-900 rounded-md shadow-lg z-10">
+          <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700">Edit</a>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700">Duplicate</a>
+          <hr class="border-gray-700 my-1"/>
+          <a href="#" class="block px-4 py-2 text-sm text-red-400 hover:text-white hover:bg-red-600">Delete</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. With icons -->
+    <div>
+      <p class="text-xs font-semibold text-gray-400 uppercase mb-2">5. With Icons</p>
+      <div class="relative inline-block group">
+        <button class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2">
+          <span>⚙️</span> Settings ▾
+        </button>
+        <div class="hidden group-hover:block absolute left-0 mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-10 p-1">
+          <a href="#" class="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+            <span>👤</span> My Profile
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+            <span>🔔</span> Notifications
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+            <span>💳</span> Billing
+          </a>
+          <hr class="my-1 border-gray-100"/>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg">
+            <span>🚪</span> Logout
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Select-style native look -->
+    <div>
+      <p class="text-xs font-semibold text-gray-400 uppercase mb-2">6. Custom Select</p>
+      <div class="relative inline-block group w-48">
+        <button class="w-full bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm text-left shadow-sm hover:border-blue-400 focus:outline-none flex justify-between items-center">
+          Choose option <span class="text-gray-400">▾</span>
+        </button>
+        <div class="hidden group-hover:block absolute left-0 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg z-10">
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700">Option 1</a>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700">Option 2</a>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700">Option 3</a>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700">Option 4</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. Mega dropdown (wide) -->
+    <div class="md:col-span-2 lg:col-span-3">
+      <p class="text-xs font-semibold text-gray-400 uppercase mb-2">7. Mega / Wide Dropdown</p>
+      <div class="relative inline-block group">
+        <button class="bg-indigo-600 text-white px-5 py-2 rounded-md text-sm font-semibold hover:bg-indigo-700 transition">
+          Products ▾
+        </button>
+        <div class="hidden group-hover:block absolute left-0 mt-1 w-[520px] bg-white border border-gray-200 rounded-xl shadow-2xl z-10 p-5 grid grid-cols-3 gap-4">
+          <div>
+            <p class="text-xs font-bold text-gray-400 uppercase mb-2">Bikes</p>
+            <a href="#" class="block text-sm text-gray-700 hover:text-indigo-600 py-1">City Cruiser</a>
+            <a href="#" class="block text-sm text-gray-700 hover:text-indigo-600 py-1">Mountain Pro</a>
+            <a href="#" class="block text-sm text-gray-700 hover:text-indigo-600 py-1">Speed X</a>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-gray-400 uppercase mb-2">Accessories</p>
+            <a href="#" class="block text-sm text-gray-700 hover:text-indigo-600 py-1">Helmets</a>
+            <a href="#" class="block text-sm text-gray-700 hover:text-indigo-600 py-1">Bags</a>
+            <a href="#" class="block text-sm text-gray-700 hover:text-indigo-600 py-1">Locks</a>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-gray-400 uppercase mb-2">Support</p>
+            <a href="#" class="block text-sm text-gray-700 hover:text-indigo-600 py-1">Warranty</a>
+            <a href="#" class="block text-sm text-gray-700 hover:text-indigo-600 py-1">Service Centers</a>
+            <a href="#" class="block text-sm text-gray-700 hover:text-indigo-600 py-1">Contact</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8. Details/summary (no JS) -->
+    <div>
+      <p class="text-xs font-semibold text-gray-400 uppercase mb-2">8. Pure HTML (details)</p>
+      <details class="relative inline-block group">
+        <summary class="cursor-pointer bg-orange-500 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-orange-600 transition select-none">
+          Open ▾
+        </summary>
+        <div class="absolute left-0 mt-1 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Link One</a>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Link Two</a>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Link Three</a>
+        </div>
+      </details>
+    </div>
+
+  </div>
+</body>
+</html>

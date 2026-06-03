@@ -1,0 +1,77 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import {
+  getCustomVariables,
+  createVariable,
+  updateVariable,
+  deleteVariable,
+  isVariableUsedInJourney,
+} from "@/lib/variables";
+
+export async function GET(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const variables = getCustomVariables();
+  return NextResponse.json({ variables });
+}
+
+export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { name, type, description } = await req.json();
+
+  if (!name || !type) {
+    return NextResponse.json(
+      { error: "Missing required fields: name, type" },
+      { status: 400 }
+    );
+  }
+
+  const variable = createVariable(name, type, description);
+  return NextResponse.json(variable, { status: 201 });
+}
+
+export async function PUT(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id, name, type, description } = await req.json();
+
+  if (!id) {
+    return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  }
+
+  const variable = updateVariable(id, name, type, description);
+  if (!variable) {
+    return NextResponse.json({ error: "Variable not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(variable);
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await req.json();
+
+  if (!id) {
+    return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  }
+
+  if (isVariableUsedInJourney(id)) {
+    return NextResponse.json(
+      { error: "Variable is used in one or more journeys. Remove it from journeys before deleting." },
+      { status: 400 }
+    );
+  }
+
+  const success = deleteVariable(id);
+  if (!success) {
+    return NextResponse.json({ error: "Variable not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ success: true });
+}
