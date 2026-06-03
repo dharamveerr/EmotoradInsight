@@ -28,15 +28,51 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "CSV file is empty" }, { status: 400 });
       }
 
-      // First line is header: name,type,description
-      lines.slice(1).forEach((line, idx) => {
-        const [name, type, description] = line.split(",").map((s) => s.trim());
-        if (!name || !type) {
-          errors.push(`Row ${idx + 2}: Missing name or type`);
-          return;
+      // Two modes:
+      // 1. Standard: first line is header "name,type,description"
+      // 2. Auto-extract: CSV contains text with @keywords, extract them
+
+      const firstLine = lines[0];
+      const isStandardFormat = firstLine.toLowerCase().includes("name") &&
+                               firstLine.toLowerCase().includes("type");
+
+      if (isStandardFormat) {
+        // Standard format: name,type,description
+        lines.slice(1).forEach((line, idx) => {
+          const [name, type, description] = line.split(",").map((s) => s.trim());
+          if (!name || !type) {
+            errors.push(`Row ${idx + 2}: Missing name or type`);
+            return;
+          }
+          // Ensure @ prefix
+          const varName = name.startsWith("@") ? name : "@" + name;
+          variables.push({ name: varName, type, description: description || undefined });
+        });
+      } else {
+        // Auto-extract mode: scan all text for @keyword patterns
+        const keywordPattern = /@[a-zA-Z_][a-zA-Z0-9_-]*/g;
+        const uniqueKeywords = new Set<string>();
+
+        for (const line of lines) {
+          const matches = line.match(keywordPattern);
+          if (matches) {
+            matches.forEach((kw) => uniqueKeywords.add(kw));
+          }
         }
-        variables.push({ name, type, description: description || undefined });
-      });
+
+        // Convert to variables (default to string type)
+        for (const keyword of uniqueKeywords) {
+          variables.push({
+            name: keyword,
+            type: "string",
+            description: `Auto-extracted from CSV`
+          });
+        }
+
+        if (uniqueKeywords.size === 0) {
+          errors.push("No @keyword patterns found in CSV. Expected format: text with @keyword references or CSV with 'name,type,description' header");
+        }
+      }
     } else if (file.name.endsWith(".json")) {
       // Parse JSON
       try {

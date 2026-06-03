@@ -143,12 +143,13 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
 
       {/* Add New Variable */}
       <div className="border-t border-white/10 p-3 space-y-2 shrink-0">
+        <p className="text-xs text-gray-500">Variable (start with @)</p>
         <input
           type="text"
           value={newVarName}
           onChange={(e) => setNewVarName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAddVariable()}
-          placeholder="Variable name…"
+          placeholder="e.g., @customer_name"
           className="w-full bg-white/10 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-green-500/40"
         />
         <select

@@ -92,19 +92,36 @@ export default function VariableUploadModal({
                 </div>
               )}
 
-              <div className="text-xs text-gray-500 space-y-1">
-                <p className="font-semibold text-gray-400">CSV Format:</p>
-                <code className="block bg-white/5 p-2 rounded">
-                  name,type,description
-                  <br />
-                  customer_age,number,Customer age
-                </code>
+              <div className="text-xs text-gray-500 space-y-2">
+                <p className="font-semibold text-gray-300">⚠️ Variables must start with @</p>
 
-                <p className="font-semibold text-gray-400 mt-2">JSON Format:</p>
+                <div>
+                  <p className="font-semibold text-gray-400">Mode 1: CSV with header</p>
+                  <code className="block bg-white/5 p-2 rounded text-xs">
+                    name,type,description
+                    <br />
+                    @customer_name,string,Customer name
+                    <br />
+                    @product_type,string,Product selected
+                  </code>
+                </div>
+
+                <div>
+                  <p className="font-semibold text-gray-400">Mode 2: Auto-extract @keywords</p>
+                  <code className="block bg-white/5 p-2 rounded text-xs">
+                    Customer bought @product_type
+                    <br />
+                    in @price_range with @discount
+                    <br />
+                    → extracts @product_type, @price_range, @discount
+                  </code>
+                </div>
+
+                <p className="font-semibold text-gray-400">JSON Format:</p>
                 <code className="block bg-white/5 p-2 rounded text-xs">
                   [
                   <br />
-                  &nbsp;&nbsp;{"{ name: 'var1', type: 'string', description: '...' }"}
+                  &nbsp;&nbsp;{"{ name: '@variable_name', type: 'string', ... }"}
                   <br />
                   ]
                 </code>

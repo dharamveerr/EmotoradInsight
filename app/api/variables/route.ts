@@ -20,11 +20,24 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { name, type, description } = await req.json();
+  let { name, type, description } = await req.json();
 
   if (!name || !type) {
     return NextResponse.json(
       { error: "Missing required fields: name, type" },
+      { status: 400 }
+    );
+  }
+
+  // Ensure variable name starts with @
+  if (!name.startsWith("@")) {
+    name = "@" + name;
+  }
+
+  // Validate name format (alphanumeric, underscore, hyphen after @)
+  if (!/^@[a-zA-Z_][a-zA-Z0-9_-]*$/.test(name)) {
+    return NextResponse.json(
+      { error: "Variable name must start with @ and contain only alphanumeric, underscore, or hyphen characters" },
       { status: 400 }
     );
   }
