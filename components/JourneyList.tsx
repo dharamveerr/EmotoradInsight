@@ -91,8 +91,14 @@ export default function JourneyList({
               onClick={() => onSelectJourney(journey.id)}
               className={`p-3 rounded border cursor-pointer transition-all group ${
                 selectedJourneyId === journey.id
-                  ? "bg-blue-500/20 border-blue-500/40"
-                  : "bg-white/5 border-white/10 hover:bg-white/10"
+                  ? journey.status === "published"
+                    ? "bg-green-500/30 border-green-500/50"
+                    : "bg-blue-500/20 border-blue-500/40"
+                  : journey.status === "published"
+                  ? "bg-green-500/10 border-green-500/30 hover:bg-green-500/20"
+                  : journey.status === "draft"
+                  ? "bg-yellow-500/10 border-yellow-500/30 hover:bg-yellow-500/20"
+                  : "bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
@@ -102,13 +108,15 @@ export default function JourneyList({
                   </p>
                   <div className="flex gap-1 mt-1">
                     <span
-                      className={`text-xs px-1.5 py-0.5 rounded font-semibold ${
+                      className={`text-xs px-2 py-0.5 rounded font-semibold ${
                         journey.status === "published"
-                          ? "bg-green-500/30 text-green-300"
-                          : "bg-gray-500/30 text-gray-300"
+                          ? "bg-green-500/40 text-green-200 border border-green-500/50"
+                          : journey.status === "draft"
+                          ? "bg-yellow-500/40 text-yellow-200 border border-yellow-500/50"
+                          : "bg-blue-500/40 text-blue-200 border border-blue-500/50"
                       }`}
                     >
-                      {journey.status}
+                      {journey.status === "published" ? "✓ Published" : journey.status === "draft" ? "◉ Draft" : "● Saved"}
                     </span>
                     <span className="text-xs text-gray-500">
                       {journey.steps?.length || 0} steps
@@ -119,7 +127,21 @@ export default function JourneyList({
 
               {/* Actions */}
               <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                {journey.status !== "published" && (
+                {journey.status === "published" ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm("Unpublish this journey? It will become a draft.")) {
+                        handlePublish(journey.id); // Publishing a published journey unpublishes it
+                      }
+                    }}
+                    disabled={publishing === journey.id}
+                    className="text-xs px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded hover:bg-yellow-500/30 transition-colors disabled:opacity-50"
+                    title="Unpublish"
+                  >
+                    📥
+                  </button>
+                ) : (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -132,17 +154,19 @@ export default function JourneyList({
                     📤
                   </button>
                 )}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(journey.id);
-                  }}
-                  disabled={deleting === journey.id}
-                  className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors disabled:opacity-50"
-                  title="Delete"
-                >
-                  ✕
-                </button>
+                {journey.status !== "published" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(journey.id);
+                    }}
+                    disabled={deleting === journey.id}
+                    className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                    title="Delete"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             </div>
           ))
