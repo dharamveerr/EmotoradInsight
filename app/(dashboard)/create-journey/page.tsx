@@ -52,43 +52,33 @@ export default function CreateJourneyPage() {
   }
 
   async function loadJourney(id: string) {
-    const res = await fetch("/api/journeys");
-    const data = await res.json();
-    const journey = data.journeys?.find((j: any) => j.id === id);
-    if (journey) {
+    try {
       setSelectedJourneyId(id);
-      setJourneyName(journey.name);
-      // Fetch full journey with structure
-      const fullRes = await fetch("/api/journeys");
-      const fullData = await fullRes.json();
-      const fullJourney = fullData.journeys?.find((j: any) => j.id === id);
-      if (fullJourney) {
-        // Need to fetch structure separately - API currently returns without structure
-        // For now, reconstruct from list data
-        fetchFullJourney(id);
+      const res = await fetch(`/api/journeys/${id}`);
+      if (!res.ok) {
+        alert("Failed to load journey");
+        return;
       }
-    }
-  }
+      const data = await res.json();
+      const journeyData = data.journey;
 
-  async function fetchFullJourney(id: string) {
-    const res = await fetch(`/api/journeys/${id}`);
-    if (!res.ok) return;
-
-    const data = await res.json();
-    const journeyData = data.journey;
-
-    if (journeyData) {
-      const fullJourney: Journey = {
-        id: journeyData.id,
-        name: journeyData.name,
-        description: journeyData.description,
-        steps: journeyData.structure?.steps || [],
-        status: journeyData.status,
-        published_at: journeyData.published_at,
-        created_at: journeyData.created_at,
-        updated_at: journeyData.updated_at,
-      };
-      setCurrentJourney(fullJourney);
+      if (journeyData) {
+        setJourneyName(journeyData.name);
+        const fullJourney: Journey = {
+          id: journeyData.id,
+          name: journeyData.name,
+          description: journeyData.description,
+          steps: journeyData.structure?.steps || [],
+          status: journeyData.status,
+          published_at: journeyData.published_at,
+          created_at: journeyData.created_at,
+          updated_at: journeyData.updated_at,
+        };
+        setCurrentJourney(fullJourney);
+      }
+    } catch (error) {
+      console.error("Error loading journey:", error);
+      alert("Error loading journey");
     }
   }
 
