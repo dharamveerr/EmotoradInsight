@@ -12,18 +12,36 @@ export async function GET(
   const { id } = params;
   const db = getDb();
 
-  const journey = db
-    .prepare("SELECT * FROM journeys WHERE id = ?")
-    .get(id) as any;
+  try {
+    const journey = db
+      .prepare("SELECT * FROM journeys WHERE id = ?")
+      .get(id) as any;
 
-  if (!journey) {
-    return NextResponse.json({ error: "Journey not found" }, { status: 404 });
+    if (!journey) {
+      return NextResponse.json({ error: "Journey not found" }, { status: 404 });
+    }
+
+    let structure: any = { steps: [] };
+    if (journey.structure) {
+      try {
+        structure = JSON.parse(journey.structure);
+      } catch (parseError) {
+        console.error("Error parsing journey structure:", parseError);
+        // Return with empty steps if parse fails
+      }
+    }
+
+    return NextResponse.json({
+      journey: {
+        ...journey,
+        structure,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching journey:", error);
+    return NextResponse.json(
+      { error: "Failed to load journey" },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({
-    journey: {
-      ...journey,
-      structure: JSON.parse(journey.structure),
-    },
-  });
 }
