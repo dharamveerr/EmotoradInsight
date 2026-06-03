@@ -22,19 +22,19 @@ export async function POST(
 
   const now = new Date().toISOString();
 
-  // If journey is already published, unpublish it (toggle)
+  // If journey is already published, unpublish it (toggle to saved)
   if (journey.status === "published") {
-    db.prepare("UPDATE journeys SET status = 'draft', published_at = NULL WHERE id = ?").run(id);
+    db.prepare("UPDATE journeys SET status = 'saved', published_at = NULL WHERE id = ?").run(id);
     return NextResponse.json({
       id,
-      status: "draft",
+      status: "saved",
       published_at: null,
     });
   }
 
   // Otherwise, publish it
-  // Unpublish any other published journey
-  db.prepare("UPDATE journeys SET status = 'draft', published_at = NULL WHERE status = 'published'").run();
+  // Change any other published journey to saved
+  db.prepare("UPDATE journeys SET status = 'saved', published_at = NULL WHERE status = 'published'").run();
 
   db.prepare(
     "UPDATE journeys SET status = 'published', published_at = ? WHERE id = ?"

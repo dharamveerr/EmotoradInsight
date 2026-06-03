@@ -96,8 +96,6 @@ export default function JourneyList({
                     : "bg-blue-500/20 border-blue-500/40"
                   : journey.status === "published"
                   ? "bg-green-500/10 border-green-500/30 hover:bg-green-500/20"
-                  : journey.status === "draft"
-                  ? "bg-yellow-500/10 border-yellow-500/30 hover:bg-yellow-500/20"
                   : "bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20"
               }`}
             >
@@ -111,12 +109,10 @@ export default function JourneyList({
                       className={`text-xs px-2 py-0.5 rounded font-semibold ${
                         journey.status === "published"
                           ? "bg-green-500/40 text-green-200 border border-green-500/50"
-                          : journey.status === "draft"
-                          ? "bg-yellow-500/40 text-yellow-200 border border-yellow-500/50"
                           : "bg-blue-500/40 text-blue-200 border border-blue-500/50"
                       }`}
                     >
-                      {journey.status === "published" ? "✓ Published" : journey.status === "draft" ? "◉ Draft" : "● Saved"}
+                      {journey.status === "published" ? "✓ Published" : "● Saved"}
                     </span>
                     <span className="text-xs text-gray-500">
                       {journey.steps?.length || 0} steps
@@ -131,15 +127,15 @@ export default function JourneyList({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm("Unpublish this journey? It will become a draft.")) {
-                        handlePublish(journey.id); // Publishing a published journey unpublishes it
+                      if (confirm("Unpublish this journey? It will become saved.")) {
+                        handlePublish(journey.id);
                       }
                     }}
                     disabled={publishing === journey.id}
-                    className="text-xs px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded hover:bg-yellow-500/30 transition-colors disabled:opacity-50"
-                    title="Unpublish"
+                    className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 transition-colors disabled:opacity-50"
+                    title="Unpublish to Saved"
                   >
-                    📥
+                    📥 Unpublish
                   </button>
                 ) : (
                   <button
@@ -151,20 +147,7 @@ export default function JourneyList({
                     className="text-xs px-2 py-1 bg-green-500/20 text-green-300 rounded hover:bg-green-500/30 transition-colors disabled:opacity-50"
                     title="Publish"
                   >
-                    📤
-                  </button>
-                )}
-                {journey.status !== "published" && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(journey.id);
-                    }}
-                    disabled={deleting === journey.id}
-                    className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors disabled:opacity-50"
-                    title="Delete"
-                  >
-                    ✕
+                    📤 Publish
                   </button>
                 )}
               </div>
