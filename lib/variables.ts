@@ -129,15 +129,20 @@ export function isVariableUsedInJourney(variableId: string): boolean {
   return false;
 }
 
-function checkVariableInStructure(structure: any, variableId: string): boolean {
-  if (structure.steps && Array.isArray(structure.steps)) {
-    for (const step of structure.steps) {
-      if (step.options && Array.isArray(step.options)) {
-        for (const option of step.options) {
-          if (option.storesInVariable === variableId) return true;
-        }
+function checkStepsForVariable(steps: any[], variableId: string): boolean {
+  if (!Array.isArray(steps)) return false;
+  for (const step of steps) {
+    if (Array.isArray(step.options)) {
+      for (const option of step.options) {
+        if (option.storesInVariable === variableId) return true;
+        if (Array.isArray(option.storesInVariables) && option.storesInVariables.includes(variableId)) return true;
       }
     }
+    if (Array.isArray(step.children) && checkStepsForVariable(step.children, variableId)) return true;
   }
   return false;
+}
+
+function checkVariableInStructure(structure: any, variableId: string): boolean {
+  return checkStepsForVariable(structure?.steps, variableId);
 }

@@ -4,23 +4,19 @@ import getDb from "@/lib/db";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = params;
+  const { id } = await params;
 
   try {
     const db = getDb();
 
-    console.log("Fetching journey with ID:", id);
-
     const journey = db
       .prepare("SELECT * FROM journeys WHERE id = ?")
       .get(id) as any;
-
-    console.log("Query result:", journey);
 
     if (!journey) {
       return NextResponse.json({ error: "Journey not found" }, { status: 404 });

@@ -7,7 +7,7 @@ export type ChatbotEvent = {
   metadata?: string; // JSON string
 };
 
-export type Journey =
+export type JourneyKey =
   | "explore_products"
   | "register_warranty"
   | "customer_support"
@@ -88,30 +88,6 @@ export type Session = {
   steps: { step: string; timestamp: string }[];
 };
 
-export type TreeCondition = {
-  variable: string;
-  operator: "equals" | "contains" | "startsWith" | "range";
-  value: string | number | [number, number]; // string for equals/contains/startsWith, [min, max] for range
-};
-
-export type TreeNode = {
-  id: string;
-  name: string;
-  type: "category" | "leaf";
-  conditions?: TreeCondition[];
-  children?: TreeNode[];
-};
-
-export type TreeConfig = {
-  id: string;
-  name: string;
-  description?: string;
-  structure: TreeNode;
-  status: "draft" | "published";
-  published_at?: string;
-  created_at: string;
-  updated_at: string;
-};
 
 export type Variable = {
   id: string;
@@ -124,13 +100,18 @@ export type Variable = {
 export type JourneyOption = {
   id: string;
   label: string;
-  storesInVariable: string;
+  /** @deprecated kept for backward compat — use storesInVariables. Holds the first selected variable. */
+  storesInVariable?: string;
+  /** One option can store multiple variables. */
+  storesInVariables?: string[];
 };
 
 export type JourneyStep = {
   id: string;
   name: string;
   options: JourneyOption[];
+  /** Nested sibling/child steps under this step. */
+  children?: JourneyStep[];
 };
 
 export type Journey = {
