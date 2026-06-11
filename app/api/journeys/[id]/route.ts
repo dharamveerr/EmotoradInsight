@@ -12,17 +12,17 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const db = getDb();
+    const db = await getDb();
 
-    const journey = db
+    const journey = await db
       .prepare("SELECT * FROM journeys WHERE id = ?")
-      .get(id) as any;
+      .get<{ structure: string | null; [k: string]: unknown }>(id);
 
     if (!journey) {
       return NextResponse.json({ error: "Journey not found" }, { status: 404 });
     }
 
-    let structure: any = { steps: [] };
+    let structure: { steps: unknown[] } = { steps: [] };
     if (journey.structure) {
       try {
         structure = JSON.parse(journey.structure);

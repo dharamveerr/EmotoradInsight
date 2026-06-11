@@ -18,11 +18,9 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const db = getDb();
+  const db = await getDb();
 
-  const user = db.prepare("SELECT * FROM app_users WHERE id = ?").get(id) as
-    | { id: string }
-    | undefined;
+  const user = await db.prepare("SELECT * FROM app_users WHERE id = ?").get<{ id: string }>(id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
@@ -49,7 +47,7 @@ export async function PATCH(
   values.push(new Date().toISOString());
   values.push(id);
 
-  db.prepare(`UPDATE app_users SET ${updates.join(", ")} WHERE id = ?`).run(
+  await db.prepare(`UPDATE app_users SET ${updates.join(", ")} WHERE id = ?`).run(
     ...values
   );
 
@@ -65,11 +63,9 @@ export async function DELETE(
 
   const { id } = await params;
   const currentUser = req.headers.get("x-user-name") || "";
-  const db = getDb();
+  const db = await getDb();
 
-  const user = db.prepare("SELECT * FROM app_users WHERE id = ?").get(id) as
-    | { id: string; username: string | null; email: string | null }
-    | undefined;
+  const user = await db.prepare("SELECT * FROM app_users WHERE id = ?").get<{ id: string; username: string | null; email: string | null }>(id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
@@ -82,6 +78,6 @@ export async function DELETE(
     );
   }
 
-  db.prepare("DELETE FROM app_users WHERE id = ?").run(id);
+  await db.prepare("DELETE FROM app_users WHERE id = ?").run(id);
   return NextResponse.json({ ok: true });
 }

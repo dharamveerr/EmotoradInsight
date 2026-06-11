@@ -1,4 +1,5 @@
 import Sidebar from "@/components/Sidebar";
+import ActivityTracker from "@/components/ActivityTracker";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -8,6 +9,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="fixed bottom-0 left-1/3 w-[400px] h-[400px] bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+        <ActivityTracker />
         {children}
       </div>
     </div>

@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     // Import variables
     for (const v of variables) {
       try {
-        const existing = getVariableByName(v.name);
+        const existing = await getVariableByName(v.name);
         if (existing) {
           if (duplicateAction === "skip") {
             errors.push(`Skipped: Variable "${v.name}" already exists`);
@@ -108,10 +108,11 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        createVariable(v.name, v.type, v.description);
+        await createVariable(v.name, v.description);
         imported++;
-      } catch (e: any) {
-        errors.push(`Error importing "${v.name}": ${e.message}`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        errors.push(`Error importing "${v.name}": ${msg}`);
       }
     }
 

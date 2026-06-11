@@ -160,8 +160,8 @@ export default function SessionsPage() {
 
   // Extract unique journeys from daily stats
   const uniqueJourneys = Array.from(
-    new Set((dailyData?.dailyStats || []).map((stat: any) => stat.journey))
-  ).sort();
+    new Set((dailyData?.dailyStats || []).map((stat: { journey: string }) => stat.journey))
+  ).sort() as string[];
 
   const filtered = sessions.filter((s) => {
     const matchOutcome = outcomeFilter === "all" || s.outcome === outcomeFilter;

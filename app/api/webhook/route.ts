@@ -11,11 +11,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const db = getDb();
-    const stmt = db.prepare(
+    const db = await getDb();
+    await db.prepare(
       "INSERT INTO events (id, userId, journey, step, timestamp, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-    );
-    stmt.run(
+    ).run(
       uuidv4(),
       String(userId),
       String(journey),

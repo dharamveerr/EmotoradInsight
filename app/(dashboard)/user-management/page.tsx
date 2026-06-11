@@ -24,7 +24,9 @@ interface LoginSession {
   user_id: string | null;
   identifier: string;
   role: string | null;
-  action: string;
+  action: string;           // 'login' | 'logout' | 'visit'
+  page: string | null;      // for visit actions
+  page_label: string | null;
   timestamp: string;
   ip_address: string | null;
 }
@@ -375,7 +377,7 @@ export default function UserManagementPage() {
         {tab === "sessions" && (
           <div className="glass rounded-2xl overflow-hidden animate-fade-in">
             {sessions.length === 0 ? (
-              <div className="p-12 text-center text-gray-500">No session history yet</div>
+              <div className="p-12 text-center text-gray-500">No activity yet</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -383,37 +385,53 @@ export default function UserManagementPage() {
                     <tr className="border-b border-white/5">
                       <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">User</th>
                       <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Role</th>
-                      <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Action</th>
+                      <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Activity</th>
+                      <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Page / Detail</th>
                       <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Timestamp</th>
-                      <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">IP Address</th>
+                      <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">IP</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {sessions.map((s) => (
-                      <tr key={s.id} className="hover:bg-white/2 transition-colors">
-                        <td className="px-5 py-3.5">
-                          <p className="text-white font-medium">{s.identifier}</p>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          {s.role && <RoleBadge role={s.role} />}
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            s.action === "login"
-                              ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                              : "bg-orange-500/10 text-orange-400 border border-orange-500/20"
-                          }`}>
-                            {s.action === "login" ? "→ Login" : "← Logout"}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5 text-xs text-gray-400">
-                          {formatDate(s.timestamp)}
-                        </td>
-                        <td className="px-5 py-3.5 text-xs text-gray-500 font-mono">
-                          {s.ip_address || "—"}
-                        </td>
-                      </tr>
-                    ))}
+                    {sessions.map((s) => {
+                      const actionMeta =
+                        s.action === "login"
+                          ? { label: "Login", color: "bg-green-500/10 text-green-400 border-green-500/20", icon: "→" }
+                          : s.action === "logout"
+                          ? { label: "Logout", color: "bg-orange-500/10 text-orange-400 border-orange-500/20", icon: "←" }
+                          : { label: "Visited", color: "bg-blue-500/10 text-blue-400 border-blue-500/20", icon: "◉" };
+                      return (
+                        <tr key={s.id} className="hover:bg-white/2 transition-colors">
+                          <td className="px-5 py-3.5">
+                            <p className="text-white font-medium">{s.identifier}</p>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {s.role && <RoleBadge role={s.role} />}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${actionMeta.color}`}>
+                              <span>{actionMeta.icon}</span>
+                              {actionMeta.label}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {s.action === "visit" ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-white font-medium">{s.page_label || s.page}</span>
+                                <span className="text-[10px] text-gray-600 font-mono">{s.page}</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-600">—</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-xs text-gray-400 whitespace-nowrap">
+                            {formatDate(s.timestamp)}
+                          </td>
+                          <td className="px-5 py-3.5 text-xs text-gray-500 font-mono">
+                            {s.ip_address || "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

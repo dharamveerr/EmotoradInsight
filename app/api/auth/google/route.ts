@@ -38,16 +38,16 @@ export async function GET(req: NextRequest) {
     const picture = gPayload.picture || "";
     const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
 
-    const db = getDb();
+    const db = await getDb();
 
     // Check/upsert in google_users (legacy table)
-    let googleUser = db
+    let googleUser = await db
       .prepare("SELECT * FROM google_users WHERE google_id = ?")
-      .get(googleId) as { id: string } | undefined;
+      .get<{ id: string }>(googleId);
 
     if (!googleUser) {
       const userId = uuidv4();
-      db.prepare(
+      await db.prepare(
         "INSERT INTO google_users (id, google_id, email, name, picture, created_at) VALUES (?, ?, ?, ?, ?, ?)"
       ).run(userId, googleId, email, name, picture, new Date().toISOString());
       googleUser = { id: userId };
@@ -55,20 +55,20 @@ export async function GET(req: NextRequest) {
 
     // Check/upsert in app_users
     const now = new Date().toISOString();
-    let appUser = db
+    let appUser = await db
       .prepare("SELECT * FROM app_users WHERE email = ?")
-      .get(email) as { id: string; role: string; is_active: number } | undefined;
+      .get<{ id: string; role: string; is_active: number }>(email);
 
     if (!appUser) {
       const newId = uuidv4();
-      db.prepare(
+      await db.prepare(
         `INSERT INTO app_users (id, email, name, picture, role, is_active, created_at, updated_at)
          VALUES (?, ?, ?, ?, 'admin', 1, ?, ?)`
       ).run(newId, email, name, picture, now, now);
       appUser = { id: newId, role: "admin", is_active: 1 };
     } else {
       // Update name/picture if changed
-      db.prepare("UPDATE app_users SET name = ?, picture = ?, updated_at = ? WHERE email = ?")
+      await db.prepare("UPDATE app_users SET name = ?, picture = ?, updated_at = ? WHERE email = ?")
         .run(name, picture, now, email);
     }
 
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Log session
-    db.prepare(
+    await db.prepare(
       `INSERT INTO login_sessions (id, user_id, identifier, role, action, timestamp, ip_address)
        VALUES (?, ?, ?, ?, 'login', ?, ?)`
     ).run(uuidv4(), appUser.id, email, appUser.role, now, ip);

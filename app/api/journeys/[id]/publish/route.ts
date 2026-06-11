@@ -11,10 +11,10 @@ export async function POST(
 
   const { id } = await params;
 
-  const db = getDb();
-  const journey = db
+  const db = await getDb();
+  const journey = await db
     .prepare("SELECT * FROM journeys WHERE id = ?")
-    .get(id) as any;
+    .get<{ status: string }>(id);
 
   if (!journey) {
     return NextResponse.json({ error: "Journey not found" }, { status: 404 });
@@ -24,7 +24,7 @@ export async function POST(
 
   // If journey is already published, unpublish it (toggle to saved)
   if (journey.status === "published") {
-    db.prepare("UPDATE journeys SET status = 'saved', published_at = NULL WHERE id = ?").run(id);
+    await db.prepare("UPDATE journeys SET status = 'saved', published_at = NULL WHERE id = ?").run(id);
     return NextResponse.json({
       id,
       status: "saved",
@@ -34,9 +34,9 @@ export async function POST(
 
   // Otherwise, publish it
   // Change any other published journey to saved
-  db.prepare("UPDATE journeys SET status = 'saved', published_at = NULL WHERE status = 'published'").run();
+  await db.prepare("UPDATE journeys SET status = 'saved', published_at = NULL WHERE status = 'published'").run();
 
-  db.prepare(
+  await db.prepare(
     "UPDATE journeys SET status = 'published', published_at = ? WHERE id = ?"
   ).run(now, id);
 

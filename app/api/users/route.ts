@@ -14,9 +14,9 @@ export async function GET(req: NextRequest) {
   const denied = requireSuperAdmin(req);
   if (denied) return denied;
 
-  const db = getDb();
+  const db = await getDb();
 
-  const users = db
+  const users = await db
     .prepare(
       `SELECT u.id, u.username, u.email, u.name, u.picture, u.role, u.is_active, u.created_at,
        (SELECT timestamp FROM login_sessions WHERE identifier = COALESCE(u.username, u.email) AND action = 'login' ORDER BY timestamp DESC LIMIT 1) AS last_login
@@ -44,11 +44,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 
-  const db = getDb();
+  const db = await getDb();
   const now = new Date().toISOString();
 
   try {
-    db.prepare(
+    await db.prepare(
       `INSERT INTO app_users (id, username, email, name, role, is_active, password_hash, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`
     ).run(uuidv4(), username || null, email || null, name || username || email, role, hashPassword(password), now, now);

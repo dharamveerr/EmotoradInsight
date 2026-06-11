@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const variables = getCustomVariables();
+  const variables = await getCustomVariables();
   return NextResponse.json({ variables });
 }
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const variable = createVariable(name, description);
+  const variable = await createVariable(name, description);
   return NextResponse.json(variable, { status: 201 });
 }
 
@@ -56,7 +56,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
-  const variable = updateVariable(id, name, description);
+  const variable = await updateVariable(id, name, description);
   if (!variable) {
     return NextResponse.json({ error: "Variable not found" }, { status: 404 });
   }
@@ -74,14 +74,14 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
-  if (isVariableUsedInJourney(id)) {
+  if (await isVariableUsedInJourney(id)) {
     return NextResponse.json(
       { error: "Variable is used in one or more journeys. Remove it from journeys before deleting." },
       { status: 400 }
     );
   }
 
-  const success = deleteVariable(id);
+  const success = await deleteVariable(id);
   if (!success) {
     return NextResponse.json({ error: "Variable not found" }, { status: 404 });
   }

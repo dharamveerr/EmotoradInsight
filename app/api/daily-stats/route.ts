@@ -7,10 +7,10 @@ export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const db = getDb();
+  const db = await getDb();
 
   // Get all user-journey sessions grouped by date
-  const rows = db
+  const rows = await db
     .prepare(`
       SELECT
         DATE(timestamp) as date,
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       GROUP BY DATE(timestamp), userId, journey
       ORDER BY date DESC
     `)
-    .all() as { date: string; userId: string; journey: string; lastStep: string; stepCount: number }[];
+    .all<{ date: string; userId: string; journey: string; lastStep: string; stepCount: number }>();
 
   // Calculate daily stats grouped by date and journey
   const dailyMap = new Map<string, Map<string, { reach: Set<string>; completed: number; total: number }>>();

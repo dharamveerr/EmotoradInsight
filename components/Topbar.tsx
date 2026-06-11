@@ -38,7 +38,19 @@ export default function Topbar({ title, subtitle }: { title: string; subtitle?: 
   const displayName = user?.name || user?.username || "User";
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    let publicIp: string | null = null;
+    try {
+      const ipRes = await fetch("https://api.ipify.org?format=json", { cache: "no-store" });
+      const ipData = await ipRes.json();
+      publicIp = ipData.ip || null;
+    } catch {
+      // ignore
+    }
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicIp }),
+    });
     router.push("/login");
     router.refresh();
   }

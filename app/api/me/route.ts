@@ -5,19 +5,19 @@ export async function GET(req: NextRequest) {
   const username = req.headers.get("x-user-name") || "";
   const role = req.headers.get("x-user-role") || "admin";
 
-  const db = getDb();
-  const user = db
+  const db = await getDb();
+  const user = await db
     .prepare("SELECT id, username, email, name, picture, phone_number, role, is_active FROM app_users WHERE username = ? OR email = ?")
-    .get(username, username) as {
-    id: string;
-    username: string | null;
-    email: string | null;
-    name: string | null;
-    picture: string | null;
-    phone_number: string | null;
-    role: string;
-    is_active: number;
-  } | undefined;
+    .get<{
+      id: string;
+      username: string | null;
+      email: string | null;
+      name: string | null;
+      picture: string | null;
+      phone_number: string | null;
+      role: string;
+      is_active: number;
+    }>(username, username);
 
   return NextResponse.json({
     id: user?.id || "",
@@ -33,11 +33,11 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const username = req.headers.get("x-user-name") || "";
-  const db = getDb();
+  const db = await getDb();
 
-  const user = db
+  const user = await db
     .prepare("SELECT id FROM app_users WHERE username = ? OR email = ?")
-    .get(username, username) as { id: string } | undefined;
+    .get<{ id: string }>(username, username);
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -63,11 +63,24 @@ export async function PATCH(req: NextRequest) {
   values.push(new Date().toISOString());
   values.push(user.id);
 
-  db.prepare(`UPDATE app_users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+  await db.prepare(`UPDATE app_users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
 
-  const updated = db
+  const updated = await db
     .prepare("SELECT id, username, email, name, picture, phone_number, role, is_active FROM app_users WHERE id = ?")
-    .get(user.id) as any;
+    .get<{
+      id: string;
+      username: string | null;
+      email: string | null;
+      name: string | null;
+      picture: string | null;
+      phone_number: string | null;
+      role: string;
+      is_active: number;
+    }>(user.id);
+
+  if (!updated) {
+    return NextResponse.json({ error: "User not found after update" }, { status: 404 });
+  }
 
   return NextResponse.json({
     id: updated.id,

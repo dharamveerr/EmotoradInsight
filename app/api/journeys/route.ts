@@ -11,12 +11,12 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const activeOnly = searchParams.get("active") === "true";
 
-  const db = getDb();
+  const db = await getDb();
 
   if (activeOnly) {
-    const journey = db
+    const journey = await db
       .prepare("SELECT * FROM journeys WHERE status = 'published' LIMIT 1")
-      .get() as any;
+      .get<{ structure: string; [k: string]: unknown }>();
 
     if (!journey) return NextResponse.json({ journey: null });
 
@@ -28,11 +28,11 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const journeys = db
+  const journeys = await db
     .prepare(
       "SELECT id, name, description, status, published_at, created_at, updated_at FROM journeys ORDER BY updated_at DESC"
     )
-    .all() as any[];
+    .all();
 
   return NextResponse.json({ journeys });
 }
@@ -52,13 +52,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing steps" }, { status: 400 });
   }
 
-  const db = getDb();
+  const db = await getDb();
   const id = uuidv4();
   const now = new Date().toISOString();
 
   const structure = { steps };
 
-  db.prepare(
+  await db.prepare(
     `INSERT INTO journeys (id, name, description, structure, status, created_at, updated_at)
      VALUES (?, ?, ?, ?, 'draft', ?, ?)`
   ).run(id, name, description || null, JSON.stringify(structure), now, now);
@@ -83,12 +83,12 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  const db = getDb();
+  const db = await getDb();
   const now = new Date().toISOString();
 
   const structure = { steps };
 
-  db.prepare(
+  await db.prepare(
     `UPDATE journeys SET name = ?, description = ?, structure = ?, updated_at = ? WHERE id = ?`
   ).run(name, description || null, JSON.stringify(structure), now, id);
 
@@ -106,10 +106,10 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
-  const db = getDb();
-  const journey = db
+  const db = await getDb();
+  const journey = await db
     .prepare("SELECT status FROM journeys WHERE id = ?")
-    .get(id) as any;
+    .get<{ status: string }>(id);
 
   if (!journey) {
     return NextResponse.json({ error: "Journey not found" }, { status: 404 });
@@ -122,7 +122,7 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  db.prepare("DELETE FROM journeys WHERE id = ?").run(id);
+  await db.prepare("DELETE FROM journeys WHERE id = ?").run(id);
 
   return NextResponse.json({ success: true });
 }

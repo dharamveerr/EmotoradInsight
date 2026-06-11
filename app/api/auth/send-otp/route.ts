@@ -13,15 +13,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid contact or type" }, { status: 400 });
   }
 
-  const db = getDb();
+  const db = await getDb();
   const code = generateOTP();
   const id = uuidv4();
 
   // Delete old OTP for this contact
-  db.prepare("DELETE FROM otp_requests WHERE contact = ?").run(contact);
+  await db.prepare("DELETE FROM otp_requests WHERE contact = ?").run(contact);
 
   // Insert new OTP
-  db.prepare(
+  await db.prepare(
     "INSERT INTO otp_requests (id, contact, type, code, created_at) VALUES (?, ?, ?, ?, ?)"
   ).run(id, contact, type, code, new Date().toISOString());
 

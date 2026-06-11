@@ -6,12 +6,12 @@ import { v4 as uuidv4 } from "uuid";
  * Extract unique variable names from all events metadata
  * Returns sorted list of variable keys found in metadata JSON
  */
-export function getAllVariablesFromDB(): string[] {
-  const db = getDb();
+export async function getAllVariablesFromDB(): Promise<string[]> {
+  const db = await getDb();
 
-  const rows = db
+  const rows = await db
     .prepare("SELECT DISTINCT metadata FROM events WHERE metadata IS NOT NULL")
-    .all() as { metadata: string }[];
+    .all<{ metadata: string }>();
 
   const vars = new Set<string>();
 
@@ -30,48 +30,48 @@ export function getAllVariablesFromDB(): string[] {
 /**
  * Get all custom variables from database
  */
-export function getCustomVariables(): Variable[] {
-  const db = getDb();
-  const rows = db
+export async function getCustomVariables(): Promise<Variable[]> {
+  const db = await getDb();
+  const rows = await db
     .prepare("SELECT * FROM variables ORDER BY name ASC")
-    .all() as Variable[];
+    .all<Variable>();
   return rows;
 }
 
 /**
  * Get variable by ID
  */
-export function getVariableById(id: string): Variable | null {
-  const db = getDb();
-  const row = db
+export async function getVariableById(id: string): Promise<Variable | null> {
+  const db = await getDb();
+  const row = await db
     .prepare("SELECT * FROM variables WHERE id = ?")
-    .get(id) as Variable | undefined;
+    .get<Variable>(id);
   return row || null;
 }
 
 /**
  * Get variable by name
  */
-export function getVariableByName(name: string): Variable | null {
-  const db = getDb();
-  const row = db
+export async function getVariableByName(name: string): Promise<Variable | null> {
+  const db = await getDb();
+  const row = await db
     .prepare("SELECT * FROM variables WHERE name = ?")
-    .get(name) as Variable | undefined;
+    .get<Variable>(name);
   return row || null;
 }
 
 /**
  * Create new variable
  */
-export function createVariable(
+export async function createVariable(
   name: string,
   description?: string
-): Variable {
-  const db = getDb();
+): Promise<Variable> {
+  const db = await getDb();
   const id = uuidv4();
   const now = new Date().toISOString();
 
-  db.prepare(
+  await db.prepare(
     "INSERT INTO variables (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
   ).run(id, name, description || null, now, now);
 
@@ -81,17 +81,17 @@ export function createVariable(
 /**
  * Update variable
  */
-export function updateVariable(
+export async function updateVariable(
   id: string,
   name?: string,
   description?: string
-): Variable | null {
-  const db = getDb();
-  const existing = getVariableById(id);
+): Promise<Variable | null> {
+  const db = await getDb();
+  const existing = await getVariableById(id);
   if (!existing) return null;
 
   const now = new Date().toISOString();
-  db.prepare(
+  await db.prepare(
     "UPDATE variables SET name = ?, description = ?, updated_at = ? WHERE id = ?"
   ).run(
     name || existing.name,
@@ -106,20 +106,20 @@ export function updateVariable(
 /**
  * Delete variable
  */
-export function deleteVariable(id: string): boolean {
-  const db = getDb();
-  const result = db.prepare("DELETE FROM variables WHERE id = ?").run(id);
+export async function deleteVariable(id: string): Promise<boolean> {
+  const db = await getDb();
+  const result = await db.prepare("DELETE FROM variables WHERE id = ?").run(id);
   return result.changes > 0;
 }
 
 /**
  * Check if variable is used in any journey
  */
-export function isVariableUsedInJourney(variableId: string): boolean {
-  const db = getDb();
-  const journeys = db
+export async function isVariableUsedInJourney(variableId: string): Promise<boolean> {
+  const db = await getDb();
+  const journeys = await db
     .prepare("SELECT structure FROM journeys")
-    .all() as { structure: string }[];
+    .all<{ structure: string }>();
 
   for (const j of journeys) {
     const structure = JSON.parse(j.structure);
@@ -129,11 +129,11 @@ export function isVariableUsedInJourney(variableId: string): boolean {
   return false;
 }
 
-function checkStepsForVariable(steps: any[], variableId: string): boolean {
+function checkStepsForVariable(steps: unknown[], variableId: string): boolean {
   if (!Array.isArray(steps)) return false;
-  for (const step of steps) {
+  for (const step of steps as Array<{ options?: unknown[]; children?: unknown[] }>) {
     if (Array.isArray(step.options)) {
-      for (const option of step.options) {
+      for (const option of step.options as Array<{ storesInVariable?: string; storesInVariables?: string[] }>) {
         if (option.storesInVariable === variableId) return true;
         if (Array.isArray(option.storesInVariables) && option.storesInVariables.includes(variableId)) return true;
       }
@@ -143,6 +143,6 @@ function checkStepsForVariable(steps: any[], variableId: string): boolean {
   return false;
 }
 
-function checkVariableInStructure(structure: any, variableId: string): boolean {
-  return checkStepsForVariable(structure?.steps, variableId);
+function checkVariableInStructure(structure: { steps?: unknown[] } | null | undefined, variableId: string): boolean {
+  return checkStepsForVariable(structure?.steps || [], variableId);
 }

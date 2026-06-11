@@ -14,13 +14,13 @@ export async function GET(req: NextRequest) {
   const to      = searchParams.get("to")   || "";
   const exportFormat = searchParams.get("export"); // "csv" | "excel"
 
-  const db = getDb();
+  const db = await getDb();
 
   // ── Single session detail ──────────────────────────────────────────
   if (userId && journey) {
-    const events = db
+    const events = await db
       .prepare("SELECT step, timestamp, metadata FROM events WHERE userId = ? AND journey = ? ORDER BY timestamp ASC")
-      .all(userId, journey) as { step: string; timestamp: string; metadata: string | null }[];
+      .all<{ step: string; timestamp: string; metadata: string | null }>(userId, journey);
 
     const steps = events.map((e) => {
       let meta: Record<string, string> = {};
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   const dateWhere = from && to ? "WHERE date(e.timestamp) BETWEEN ? AND ?" : "";
   const dateParams: string[] = from && to ? [from, to] : [];
 
-  const rows = db
+  const rows = await db
     .prepare(`
       SELECT
         userId, journey,
@@ -51,10 +51,10 @@ export async function GET(req: NextRequest) {
       ORDER BY startTime DESC
       LIMIT 2000
     `)
-    .all(...dateParams) as {
+    .all<{
       userId: string; journey: string; startTime: string;
       stepCount: number; lastStep: string; firstMeta: string | null;
-    }[];
+    }>(...dateParams);
 
   const sessions = rows.map((r) => {
     const steps = JOURNEY_STEPS[r.journey] || [];
@@ -78,13 +78,13 @@ export async function GET(req: NextRequest) {
   // ── Export ─────────────────────────────────────────────────────────
   if (exportFormat === "csv" || exportFormat === "excel") {
     // Flatten: one row per event with all metadata keys
-    const allEvents = db
+    const allEvents = await db
       .prepare(`
         SELECT userId, journey, step, timestamp, metadata
         FROM events
         ORDER BY userId, journey, timestamp ASC
       `)
-      .all() as { userId: string; journey: string; step: string; timestamp: string; metadata: string | null }[];
+      .all<{ userId: string; journey: string; step: string; timestamp: string; metadata: string | null }>();
 
     // Collect all unique metadata keys
     const allKeys = new Set<string>();

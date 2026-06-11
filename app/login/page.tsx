@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
+import { BackgroundPaths } from "@/components/ui/background-paths";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const GOOGLE_ERRORS: Record<string, string> = {
@@ -47,10 +48,21 @@ function LoginInner() {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    // Fetch real public IP before login so it gets logged in login_sessions
+    let publicIp: string | null = null;
+    try {
+      const ipRes = await fetch("https://api.ipify.org?format=json", { cache: "no-store" });
+      const ipData = await ipRes.json();
+      publicIp = ipData.ip || null;
+    } catch {
+      // ignore — server will fall back to headers
+    }
+
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, publicIp }),
     });
     setLoading(false);
     if (res.ok) {
@@ -65,6 +77,9 @@ function LoginInner() {
 
   return (
     <div onMouseMove={onMove} className="login-page min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-[#020817] via-[#0a1428] to-[#020817] relative overflow-hidden">
+      {/* Animated background paths */}
+      <BackgroundPaths />
+
       {/* ambient blue orbs */}
       <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl animate-pulse" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1.2s" }} />

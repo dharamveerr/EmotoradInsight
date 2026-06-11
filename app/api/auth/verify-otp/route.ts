@@ -10,10 +10,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing contact or code" }, { status: 400 });
   }
 
-  const db = getDb();
-  const row = db
+  const db = await getDb();
+  const row = await db
     .prepare("SELECT * FROM otp_requests WHERE contact = ? ORDER BY created_at DESC LIMIT 1")
-    .get(contact) as { code: string; created_at: string } | undefined;
+    .get<{ code: string; created_at: string }>(contact);
 
   if (!row) {
     return NextResponse.json({ error: "No OTP found" }, { status: 400 });
@@ -30,18 +30,18 @@ export async function POST(req: NextRequest) {
   }
 
   // Mark verified
-  db.prepare("UPDATE otp_requests SET verified = 1 WHERE contact = ?").run(contact);
+  await db.prepare("UPDATE otp_requests SET verified = 1 WHERE contact = ?").run(contact);
 
   // Check/upsert in app_users
   const now = new Date().toISOString();
-  let appUser = db
+  let appUser = await db
     .prepare("SELECT * FROM app_users WHERE email = ? OR username = ?")
-    .get(contact, contact) as { id: string; role: string; is_active: number } | undefined;
+    .get<{ id: string; role: string; is_active: number }>(contact, contact);
 
   if (!appUser) {
     const newId = uuidv4();
     const isEmail = contact.includes("@");
-    db.prepare(
+    await db.prepare(
       `INSERT INTO app_users (id, ${isEmail ? "email" : "username"}, role, is_active, created_at, updated_at)
        VALUES (?, ?, 'admin', 1, ?, ?)`
     ).run(newId, contact, now, now);
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
   // Log session
   const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
-  db.prepare(
+  await db.prepare(
     `INSERT INTO login_sessions (id, user_id, identifier, role, action, timestamp, ip_address)
      VALUES (?, ?, ?, ?, 'login', ?, ?)`
   ).run(uuidv4(), appUser.id, contact, appUser.role, now, ip);
