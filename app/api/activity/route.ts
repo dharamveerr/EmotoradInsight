@@ -11,7 +11,36 @@ const PAGE_LABELS: Record<string, string> = {
   "/sessions": "MIS Report",
   "/create-tree": "Create Tree",
   "/user-management": "User Management",
+  "/history": "History",
 };
+
+export async function GET(req: NextRequest) {
+  const identifier = req.headers.get("x-user-name") || "";
+  if (!identifier) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const db = await getDb();
+  const filterUser = req.nextUrl.searchParams.get("identifier");
+  const params = filterUser ? [filterUser, filterUser] : [];
+
+  // Unified timeline: login/logout events + page visits
+  const history = await db
+    .prepare(
+      `SELECT id, user_id, identifier, role, action, NULL AS page, NULL AS page_label, timestamp, ip_address
+       FROM login_sessions
+       ${filterUser ? "WHERE identifier = ?" : ""}
+       UNION ALL
+       SELECT id, user_id, identifier, role, 'visit' AS action, page, page_label, timestamp, ip_address
+       FROM activity_log
+       ${filterUser ? "WHERE identifier = ?" : ""}
+       ORDER BY timestamp DESC
+       LIMIT 500`
+    )
+    .all(...params);
+
+  return NextResponse.json({ history });
+}
 
 export async function POST(req: NextRequest) {
   const identifier = req.headers.get("x-user-name") || "";
