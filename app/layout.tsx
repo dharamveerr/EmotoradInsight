@@ -13,8 +13,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EmotoradInsight",
+  title: "Emotorad",
   description: "WhatsApp Chatbot Analytics Dashboard",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
+      { url: "/favicon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/favicon.png", sizes: "256x256", type: "image/png" },
+    ],
+    apple: "/favicon.png",
+    shortcut: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
