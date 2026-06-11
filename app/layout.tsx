@@ -17,12 +17,12 @@ export const metadata: Metadata = {
   description: "WhatsApp Chatbot Analytics Dashboard",
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
-      { url: "/favicon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/favicon.png", sizes: "256x256", type: "image/png" },
+      { url: "/favicon.ico?v=2", sizes: "32x32", type: "image/x-icon" },
+      { url: "/favicon-192.png?v=2", sizes: "192x192", type: "image/png" },
+      { url: "/favicon.png?v=2", sizes: "256x256", type: "image/png" },
     ],
-    apple: "/favicon.png",
-    shortcut: "/favicon.ico",
+    apple: "/favicon.png?v=2",
+    shortcut: "/favicon.ico?v=2",
   },
 };
 
