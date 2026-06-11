@@ -20,9 +20,24 @@ export async function PATCH(
   const body = await req.json();
   const db = await getDb();
 
-  const user = await db.prepare("SELECT * FROM app_users WHERE id = ?").get<{ id: string }>(id);
+  const user = await db.prepare("SELECT * FROM app_users WHERE id = ?").get<{ id: string; role: string; is_active: number }>(id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  // Guard: never allow the last active super_admin to be demoted or deactivated
+  const demoting = "role" in body && body.role !== "super_admin";
+  const deactivating = "is_active" in body && !body.is_active;
+  if (user.role === "super_admin" && user.is_active && (demoting || deactivating)) {
+    const { c } = (await db
+      .prepare("SELECT COUNT(*) as c FROM app_users WHERE role = 'super_admin' AND is_active = 1")
+      .get<{ c: number }>())!;
+    if (Number(c) <= 1) {
+      return NextResponse.json(
+        { error: "Cannot change role: at least one active Super Admin is required" },
+        { status: 400 }
+      );
+    }
   }
 
   const allowed = ["role", "is_active", "name"] as const;
@@ -65,9 +80,22 @@ export async function DELETE(
   const currentUser = req.headers.get("x-user-name") || "";
   const db = await getDb();
 
-  const user = await db.prepare("SELECT * FROM app_users WHERE id = ?").get<{ id: string; username: string | null; email: string | null }>(id);
+  const user = await db.prepare("SELECT * FROM app_users WHERE id = ?").get<{ id: string; username: string | null; email: string | null; role: string; is_active: number }>(id);
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  // Guard: never allow the last active super_admin to be deleted
+  if (user.role === "super_admin" && user.is_active) {
+    const { c } = (await db
+      .prepare("SELECT COUNT(*) as c FROM app_users WHERE role = 'super_admin' AND is_active = 1")
+      .get<{ c: number }>())!;
+    if (Number(c) <= 1) {
+      return NextResponse.json(
+        { error: "Cannot delete: at least one active Super Admin is required" },
+        { status: 400 }
+      );
+    }
   }
 
   // Prevent self-deletion
