@@ -5,6 +5,7 @@ const SECRET = new TextEncoder().encode(
   process.env.AUTH_SECRET || "super-secret-key-change-in-production"
 );
 const COOKIE = "ei_session";
+const PENDING_COOKIE = "ei_pending_google";
 
 export async function createSession(identifier: string, role: string) {
   const token = await new SignJWT({ username: identifier, role })
@@ -35,4 +36,4 @@ export async function getSessionPayload(token: string) {
   }
 }
 
-export { COOKIE, SECRET };
+export { COOKIE, SECRET, PENDING_COOKIE };

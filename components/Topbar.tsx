@@ -5,24 +5,11 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
 import ProfileEditModal from "./ProfileEditModal";
+import Avatar from "./Avatar";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 
 function UserAvatar({ name, picture }: { name: string; picture: string | null }) {
-  if (picture) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={picture} alt={name} className="w-9 h-9 rounded-full object-cover border border-white/10" />;
-  }
-  const initials = name
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-  return (
-    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-sm font-bold border border-white/10">
-      {initials}
-    </div>
-  );
+  return <Avatar name={name} picture={picture} className="w-9 h-9" textClass="text-sm" />;
 }
 
 export default function Topbar({ title, subtitle }: { title: string; subtitle?: string }) {

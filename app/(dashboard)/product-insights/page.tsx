@@ -169,40 +169,6 @@ export default function ProductInsightsPage() {
           </div>
         </div>
 
-        {/* Funnel Breakdown */}
-        <div className="glass rounded-2xl p-6 animate-fade-in delay-5">
-          <h2 className="font-bold text-white mb-5">Journey Funnel</h2>
-          {isLoading ? (
-            <div className="skeleton rounded-lg h-48" />
-          ) : (
-            <div className="space-y-3">
-              {funnel.map((item: any, i: number) => {
-                const maxVal = funnel[0]?.count || 1;
-                const pct = (item.count / maxVal) * 100;
-                const dropRate = i > 0 ? Math.round((1 - item.count / funnel[i - 1].count) * 100) : 0;
-                return (
-                  <div key={item.step}>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="font-medium text-white capitalize">{item.step.replace(/_/g, " ")}</span>
-                      <span className="text-xs text-gray-400">{item.count} users {dropRate > 0 ? `(${dropRate}% drop)` : ""}</span>
-                    </div>
-                    <div className="h-10 bg-white/5 rounded-lg overflow-hidden">
-                      <div
-                        className="h-full rounded-lg transition-all duration-700 flex items-center justify-end pr-3"
-                        style={{
-                          width: `${pct}%`,
-                          background: `linear-gradient(90deg, rgba(34,197,94,${1 - i * 0.15}), rgba(16,185,129,${0.8 - i * 0.15}))`,
-                        }}
-                      >
-                        {pct > 20 && <span className="text-xs font-bold text-white">{pct.toFixed(0)}%</span>}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </main>
     </div>
   );

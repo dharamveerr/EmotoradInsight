@@ -53,24 +53,21 @@ export async function GET(req: NextRequest) {
       googleUser = { id: userId };
     }
 
-    // Check/upsert in app_users
+    // Check in app_users — existing users log in directly
     const now = new Date().toISOString();
-    let appUser = await db
+    const appUser = await db
       .prepare("SELECT * FROM app_users WHERE email = ?")
       .get<{ id: string; role: string; is_active: number }>(email);
 
     if (!appUser) {
-      const newId = uuidv4();
-      await db.prepare(
-        `INSERT INTO app_users (id, email, name, picture, role, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'admin', 1, ?, ?)`
-      ).run(newId, email, name, picture, now, now);
-      appUser = { id: newId, role: "admin", is_active: 1 };
-    } else {
-      // Update name/picture if changed
-      await db.prepare("UPDATE app_users SET name = ?, picture = ?, updated_at = ? WHERE email = ?")
-        .run(name, picture, now, email);
+      // NEW Google user → ask for consent first; the login page shows
+      // "You're new here — create an account?" and only then sends the code.
+      return NextResponse.redirect(new URL(`/login?newuser=1&email=${encodeURIComponent(email)}`, req.url));
     }
+
+    // Update name/picture if changed
+    await db.prepare("UPDATE app_users SET name = ?, picture = ?, updated_at = ? WHERE email = ?")
+      .run(name, picture, now, email);
 
     if (!appUser.is_active) {
       return NextResponse.redirect(new URL("/login?error=access_denied", req.url));

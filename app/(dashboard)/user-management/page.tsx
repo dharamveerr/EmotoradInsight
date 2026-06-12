@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useSWR, { mutate } from "swr";
 import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
+import Avatar from "@/components/Avatar";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -32,21 +33,7 @@ interface LoginSession {
 }
 
 function UserAvatar({ name, picture }: { name: string; picture: string | null }) {
-  if (picture) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={picture} alt={name} className="w-8 h-8 rounded-full object-cover" />;
-  }
-  const initials = name
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-  return (
-    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs font-bold">
-      {initials}
-    </div>
-  );
+  return <Avatar name={name} picture={picture} className="w-8 h-8" textClass="text-xs" />;
 }
 
 function RoleBadge({ role }: { role: string }) {
@@ -203,6 +190,14 @@ export default function UserManagementPage() {
   const [tab, setTab] = useState<"users" | "sessions">("users");
   const [showAdd, setShowAdd] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [warning, setWarning] = useState("");
+
+  // Auto-dismiss the warning banner after 5 seconds
+  useEffect(() => {
+    if (!warning) return;
+    const t = setTimeout(() => setWarning(""), 5000);
+    return () => clearTimeout(t);
+  }, [warning]);
 
   const { data: usersData } = useSWR<{ users: AppUser[] }>("/api/users", fetcher);
   const { data: sessionsData } = useSWR<{ sessions: LoginSession[] }>(
@@ -215,22 +210,32 @@ export default function UserManagementPage() {
 
   async function toggleAccess(user: AppUser) {
     setUpdatingId(user.id);
-    await fetch(`/api/users/${user.id}`, {
+    setWarning("");
+    const res = await fetch(`/api/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_active: user.is_active ? 0 : 1 }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setWarning(data.error || "Failed to update user");
+    }
     mutate("/api/users");
     setUpdatingId(null);
   }
 
   async function changeRole(user: AppUser, newRole: string) {
     setUpdatingId(user.id);
-    await fetch(`/api/users/${user.id}`, {
+    setWarning("");
+    const res = await fetch(`/api/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: newRole }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setWarning(data.error || "Failed to change role");
+    }
     mutate("/api/users");
     setUpdatingId(null);
   }
@@ -238,7 +243,12 @@ export default function UserManagementPage() {
   async function deleteUser(user: AppUser) {
     const name = user.name || user.username || user.email || "this user";
     if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
-    await fetch(`/api/users/${user.id}`, { method: "DELETE" });
+    setWarning("");
+    const res = await fetch(`/api/users/${user.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setWarning(data.error || "Failed to delete user");
+    }
     mutate("/api/users");
   }
 
@@ -255,6 +265,23 @@ export default function UserManagementPage() {
       <Topbar title="User Management" subtitle="Manage access and session history" />
 
       <main className="flex-1 p-7 space-y-6">
+        {/* Warning banner */}
+        {warning && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm animate-fade-in">
+            <div className="flex items-center gap-3">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 shrink-0">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <span>{warning}</span>
+            </div>
+            <button onClick={() => setWarning("")} className="text-amber-300/70 hover:text-amber-200 font-bold px-2">
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/10">

@@ -1,16 +1,69 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { BackgroundPaths } from "@/components/ui/background-paths";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const GOOGLE_ERRORS: Record<string, string> = {
   google_not_configured: "Google login not set up yet. Add GOOGLE_CLIENT_ID + SECRET to .env.local. Use Username/Password for now.",
+  not_registered: "No account found for this Google email. Please sign up first.",
   config: "Google OAuth config missing on server.",
   auth_failed: "Google sign-in failed. Try again.",
   invalid_token: "Google token invalid. Try again.",
   no_code: "Google sign-in cancelled.",
 };
+
+// 6-digit OTP input: auto-focuses the first box, advances as digits are
+// typed, backspace moves back, paste fills all boxes.
+function OtpInput({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    refs.current[0]?.focus();
+  }, []);
+
+  function setDigit(i: number, d: string) {
+    const chars = value.padEnd(6, " ").split("");
+    chars[i] = d || " ";
+    const next = chars.join("").trimEnd().replace(/ /g, "");
+    onChange(next);
+  }
+
+  return (
+    <div className="flex justify-center gap-2.5">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <input
+          key={i}
+          ref={(el) => { refs.current[i] = el; }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          disabled={disabled}
+          value={value[i] || ""}
+          onChange={(e) => {
+            const d = e.target.value.replace(/\D/g, "").slice(-1);
+            setDigit(i, d);
+            if (d && i < 5) refs.current[i + 1]?.focus();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Backspace" && !value[i] && i > 0) {
+              refs.current[i - 1]?.focus();
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault();
+            const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+            if (pasted) {
+              onChange(pasted);
+              refs.current[Math.min(pasted.length, 5)]?.focus();
+            }
+          }}
+          className="w-12 h-14 bg-transparent border border-white/20 rounded-xl text-white text-center text-2xl font-bold focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition disabled:opacity-50"
+        />
+      ))}
+    </div>
+  );
+}
 
 function EmotoradLogo() {
   return (
@@ -31,12 +84,168 @@ function LoginInner() {
   const [mounted, setMounted] = useState(false);
   const [hoverBike, setHoverBike] = useState(false);
   const [parallax, setParallax] = useState(0);
+  // Login vs Sign Up tab
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  // Signup flow: email → (consent for new Google users) → code → credentials
+  const [signupStep, setSignupStep] = useState<"email" | "consent" | "code" | "credentials">("email");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupCode, setSignupCode] = useState("");
+  const [signupUsername, setSignupUsername] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [signupBusy, setSignupBusy] = useState(false);
+  // Forgot password flow: "" = off, "request" = ask identifier, "reset" = enter code + new password
+  const [forgotStep, setForgotStep] = useState<"" | "request" | "reset">("");
+  const [forgotId, setForgotId] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     setMounted(true);
     const err = searchParams.get("error");
     if (err && GOOGLE_ERRORS[err]) setError(GOOGLE_ERRORS[err]);
+    // Google sign-in with an unregistered email → ask consent before signing up
+    if (searchParams.get("newuser") === "1") {
+      setMode("signup");
+      setSignupStep("consent");
+      setSignupEmail(searchParams.get("email") || "");
+    }
   }, [searchParams]);
+
+  async function handleForgotRequest(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotBusy(true);
+    setError("");
+    const res = await fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: forgotId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setForgotBusy(false);
+    if (res.ok) {
+      setMaskedEmail(data.maskedEmail || "your email");
+      setForgotStep("reset");
+    } else {
+      setError(data.error || "Failed to send reset code");
+    }
+  }
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotBusy(true);
+    setError("");
+    const res = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: forgotId, code: resetCode, newPassword }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setForgotBusy(false);
+    if (res.ok) {
+      setForgotStep("");
+      setForgotId("");
+      setResetCode("");
+      setNewPassword("");
+      setNotice("Password reset successfully. Log in with your new password.");
+    } else {
+      setError(data.error || "Failed to reset password");
+    }
+  }
+
+  function exitForgot() {
+    setForgotStep("");
+    setForgotId("");
+    setResetCode("");
+    setNewPassword("");
+    setError("");
+    setNotice("");
+  }
+
+  async function requestSignupCode() {
+    setSignupBusy(true);
+    setError("");
+    const res = await fetch("/api/auth/signup/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: signupEmail }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setSignupBusy(false);
+    if (res.ok) {
+      setSignupCode("");
+      setSignupStep("code");
+    } else {
+      setError(data.error || "Failed to start sign up");
+    }
+  }
+
+  async function handleVerifyCode(code: string) {
+    setSignupBusy(true);
+    setError("");
+    const res = await fetch("/api/auth/signup/verify-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: signupEmail, code }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setSignupBusy(false);
+    if (res.ok) {
+      setSignupStep("credentials");
+    } else {
+      setError(data.error || "Verification failed");
+      setSignupCode("");
+    }
+  }
+
+  async function handleSignupEmail(e: React.FormEvent) {
+    e.preventDefault();
+    await requestSignupCode();
+  }
+
+  async function handleSignupComplete(e: React.FormEvent) {
+    e.preventDefault();
+    setSignupBusy(true);
+    setError("");
+    let publicIp: string | null = null;
+    try {
+      const ipRes = await fetch("https://api.ipify.org?format=json", { cache: "no-store" });
+      publicIp = (await ipRes.json()).ip || null;
+    } catch { /* server falls back to headers */ }
+
+    const res = await fetch("/api/auth/signup/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: signupEmail,
+        code: signupCode,
+        username: signupUsername,
+        password: signupPassword,
+        publicIp,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setSignupBusy(false);
+    if (res.ok) {
+      router.push("/");
+      router.refresh();
+    } else {
+      setError(data.error || "Sign up failed");
+    }
+  }
+
+  function switchMode(m: "login" | "signup") {
+    setMode(m);
+    setSignupStep("email");
+    setSignupCode("");
+    setSignupPassword("");
+    setError("");
+    setNotice("");
+  }
 
   function onMove(e: React.MouseEvent) {
     // -1..1 based on cursor x → bike parallax
@@ -181,7 +390,248 @@ function LoginInner() {
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-white text-center mb-2">Log in or sign up</h2>
+          {mode === "signup" && !forgotStep ? (
+            <>
+              <h2 className="text-2xl font-bold text-white text-center mb-2">
+                {signupStep === "consent" ? "You're new here!"
+                  : signupStep === "code" ? "Verify your email"
+                  : signupStep === "credentials" ? "Set your credentials"
+                  : "Create your account"}
+              </h2>
+              <p className="text-gray-400 text-center mb-7 text-sm">
+                {signupStep === "email"
+                  ? "Enter your email to get started. A verification code will be sent to the Super Admin."
+                  : signupStep === "consent"
+                  ? <><b className="text-gray-200">{signupEmail}</b> is not registered yet. Would you like to create a new account with this email?</>
+                  : signupStep === "code"
+                  ? <>Ask the <b className="text-gray-200">Super Admin</b> for the verification code sent for <b className="text-gray-200">{signupEmail}</b>.</>
+                  : <>Verified ✓ — now choose how you&apos;ll log in to <b className="text-gray-200">{signupEmail}</b>.</>}
+              </p>
+
+              {error && (
+                <div className="mb-5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm text-center">
+                  {error}
+                </div>
+              )}
+
+              {signupStep === "consent" ? (
+                <div className="space-y-3">
+                  <button
+                    onClick={requestSignupCode}
+                    disabled={signupBusy}
+                    className="w-full bg-white hover:bg-gray-100 text-slate-900 font-bold py-3.5 rounded-full transition-all shadow-lg disabled:opacity-50"
+                  >
+                    {signupBusy ? "Sending code..." : "Yes, create my account"}
+                  </button>
+                  <button
+                    onClick={() => switchMode("login")}
+                    className="w-full bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold py-3.5 rounded-full transition-all"
+                  >
+                    No, back to login
+                  </button>
+                </div>
+              ) : signupStep === "email" ? (
+                <>
+                <a
+                  href="/api/auth/google/signin"
+                  onClick={() => setGoogleLoading(true)}
+                  className="w-full bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold py-3.5 rounded-full transition-all flex items-center justify-center gap-3 mb-5"
+                >
+                  {googleLoading ? (
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" className="w-5 h-5">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                  )}
+                  Sign up with Google
+                </a>
+
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="flex-1 h-px bg-white/10" />
+                  <span className="text-gray-500 text-sm font-medium">OR</span>
+                  <div className="flex-1 h-px bg-white/10" />
+                </div>
+
+                <form onSubmit={handleSignupEmail} className="space-y-3">
+                  <input
+                    type="email"
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
+                    className="w-full bg-transparent border border-white/20 rounded-full px-5 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
+                    placeholder="Email (required)"
+                    required
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    disabled={signupBusy}
+                    className="w-full bg-white hover:bg-gray-100 text-slate-900 font-bold py-3.5 rounded-full transition-all shadow-lg disabled:opacity-50"
+                  >
+                    {signupBusy ? "Sending code..." : "Continue"}
+                  </button>
+                </form>
+                </>
+              ) : signupStep === "code" ? (
+                <div className="space-y-4">
+                  <OtpInput
+                    value={signupCode}
+                    onChange={(v) => {
+                      setSignupCode(v);
+                      if (v.length === 6 && !signupBusy) handleVerifyCode(v);
+                    }}
+                    disabled={signupBusy}
+                  />
+                  <button
+                    onClick={() => signupCode.length === 6 && handleVerifyCode(signupCode)}
+                    disabled={signupBusy || signupCode.length !== 6}
+                    className="w-full bg-white hover:bg-gray-100 text-slate-900 font-bold py-3.5 rounded-full transition-all shadow-lg disabled:opacity-50"
+                  >
+                    {signupBusy ? "Verifying..." : "Verify Code"}
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSignupComplete} className="space-y-3">
+                  <input
+                    type="text"
+                    value={signupUsername}
+                    onChange={(e) => setSignupUsername(e.target.value)}
+                    className="w-full bg-transparent border border-white/20 rounded-full px-5 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
+                    placeholder="Username (optional — email used if blank)"
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <div className="relative">
+                    <input
+                      type={showSignupPassword ? "text" : "password"}
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      className="w-full bg-transparent border border-white/20 rounded-full px-5 py-3.5 pr-12 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
+                      placeholder="Create password (min 6 characters)"
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupPassword(!showSignupPassword)}
+                      className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition"
+                    >
+                      {showSignupPassword ? "🙈" : "👁️"}
+                    </button>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={signupBusy}
+                    className="w-full bg-white hover:bg-gray-100 text-slate-900 font-bold py-3.5 rounded-full transition-all shadow-lg disabled:opacity-50"
+                  >
+                    {signupBusy ? "Creating account..." : "Create Account & Log in"}
+                  </button>
+                </form>
+              )}
+
+              <p className="text-center text-sm text-gray-500 mt-6">
+                Already have an account?{" "}
+                <button
+                  onClick={() => switchMode("login")}
+                  className="text-blue-400 hover:text-blue-300 font-semibold transition"
+                >
+                  Log in
+                </button>
+              </p>
+            </>
+          ) : forgotStep ? (
+            <>
+              <h2 className="text-2xl font-bold text-white text-center mb-2">Reset password</h2>
+              <p className="text-gray-400 text-center mb-7 text-sm">
+                {forgotStep === "request"
+                  ? "Enter your username or email — we'll send a reset code to your registered email."
+                  : <>Code sent to <b className="text-gray-200">{maskedEmail}</b>. Enter it below with your new password.</>}
+              </p>
+
+              {error && (
+                <div className="mb-5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm text-center">
+                  {error}
+                </div>
+              )}
+
+              {forgotStep === "request" ? (
+                <form onSubmit={handleForgotRequest} className="space-y-3">
+                  <input
+                    type="text"
+                    value={forgotId}
+                    onChange={(e) => setForgotId(e.target.value)}
+                    className="w-full bg-transparent border border-white/20 rounded-full px-5 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
+                    placeholder="Username or email"
+                    required
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    disabled={forgotBusy}
+                    className="w-full bg-white hover:bg-gray-100 text-slate-900 font-bold py-3.5 rounded-full transition-all shadow-lg disabled:opacity-50"
+                  >
+                    {forgotBusy ? "Sending..." : "Send Reset Code"}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleResetPassword} className="space-y-3">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ""))}
+                    className="w-full bg-transparent border border-white/20 rounded-full px-5 py-3.5 text-white text-center text-xl tracking-[0.5em] placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
+                    placeholder="••••••"
+                    required
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-transparent border border-white/20 rounded-full px-5 py-3.5 pr-12 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
+                      placeholder="New password (min 6 characters)"
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition"
+                    >
+                      {showNewPassword ? "🙈" : "👁️"}
+                    </button>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={forgotBusy || resetCode.length !== 6}
+                    className="w-full bg-white hover:bg-gray-100 text-slate-900 font-bold py-3.5 rounded-full transition-all shadow-lg disabled:opacity-50"
+                  >
+                    {forgotBusy ? "Resetting..." : "Reset Password"}
+                  </button>
+                </form>
+              )}
+
+              <button
+                onClick={exitForgot}
+                className="w-full text-gray-400 hover:text-white text-sm mt-5 transition"
+              >
+                ← Back to login
+              </button>
+            </>
+          ) : (
+          <>
+          <h2 className="text-2xl font-bold text-white text-center mb-2">Welcome back</h2>
           <p className="text-gray-400 text-center mb-7 text-sm">
             Access premium chatbot analytics & journey insights.
           </p>
@@ -189,6 +639,12 @@ function LoginInner() {
           {error && (
             <div className="mb-5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm text-center">
               {error}
+            </div>
+          )}
+
+          {notice && (
+            <div className="mb-5 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-300 text-sm text-center">
+              {notice}
             </div>
           )}
 
@@ -267,11 +723,31 @@ function LoginInner() {
             >
               {loading ? "Signing in..." : "Continue"}
             </button>
+
+            <button
+              type="button"
+              onClick={() => { setForgotStep("request"); setError(""); setNotice(""); }}
+              className="w-full text-blue-400 hover:text-blue-300 text-sm pt-1 transition"
+            >
+              Forgot password?
+            </button>
           </form>
 
-          <p className="text-gray-600 text-xs text-center mt-7">
+          <p className="text-center text-sm text-gray-500 mt-6">
+            New user?{" "}
+            <button
+              onClick={() => switchMode("signup")}
+              className="text-blue-400 hover:text-blue-300 font-semibold transition"
+            >
+              Sign up
+            </button>
+          </p>
+
+          <p className="text-gray-600 text-xs text-center mt-4">
             Secured by OAuth 2.0 · Premium Analytics Dashboard
           </p>
+          </>
+          )}
         </div>
       </div>
 

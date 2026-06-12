@@ -13,6 +13,7 @@ interface ProfileEditModalProps {
 export default function ProfileEditModal({ user, isOpen, onClose }: ProfileEditModalProps) {
   const [formData, setFormData] = useState({
     name: user.name || "",
+    username: user.username || "",
     email: user.email || "",
     phone_number: user.phone_number || "",
     picture: user.picture || "",
@@ -31,6 +32,7 @@ export default function ProfileEditModal({ user, isOpen, onClose }: ProfileEditM
   useEffect(() => {
     setFormData({
       name: user.name || "",
+      username: user.username || "",
       email: user.email || "",
       phone_number: user.phone_number || "",
       picture: user.picture || "",
@@ -246,7 +248,7 @@ export default function ProfileEditModal({ user, isOpen, onClose }: ProfileEditM
             <div className="w-24 h-24 rounded-full bg-slate-800 border border-white/10 overflow-hidden flex items-center justify-center">
               {previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewUrl} alt="Profile" className="w-full h-full object-cover" />
+                <img src={previewUrl} alt="Profile" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-sm font-bold">
                   {formData.name
@@ -302,15 +304,32 @@ export default function ProfileEditModal({ user, isOpen, onClose }: ProfileEditM
 
             <div>
               <label className="block text-xs font-semibold text-gray-400 mb-1">
-                Email
+                Username
+              </label>
+              <input
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
+                placeholder="username"
+                autoComplete="off"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 mb-1">
+                Email <span className="text-gray-500 font-normal">(cannot be changed)</span>
               </label>
               <input
                 type="email"
                 name="email"
                 value={formData.email}
-                onChange={handleChange}
-                className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
+                readOnly
+                disabled
+                className="w-full bg-slate-800/30 border border-white/5 rounded-lg px-3 py-2 text-gray-500 cursor-not-allowed"
                 placeholder="your.email@example.com"
+                title="Email is your login identity and cannot be changed"
               />
             </div>
 
@@ -327,6 +346,7 @@ export default function ProfileEditModal({ user, isOpen, onClose }: ProfileEditM
                 placeholder="+1 (555) 123-4567"
               />
             </div>
+
           </div>
 
           {error && (
