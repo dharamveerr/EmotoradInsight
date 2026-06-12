@@ -7,9 +7,10 @@ const CODE_TTL_MS = 10 * 60 * 1000;
 
 // Step 2 of signup: code + password (+ optional username; defaults to email)
 export async function POST(req: NextRequest) {
-  const { email, code, username, password, publicIp } = await req.json();
+  const { email, code, username, password, name, publicIp } = await req.json();
   const cleanEmail = String(email || "").trim().toLowerCase();
   const cleanUsername = String(username || "").trim() || cleanEmail;
+  const cleanName = String(name || "").trim() || "User";
 
   if (!cleanEmail || !code?.trim() || !password) {
     return NextResponse.json({ error: "All fields are required" }, { status: 400 });
@@ -39,10 +40,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "This email is already registered. Please log in instead." }, { status: 409 });
   }
   const usernameClash = await db
-    .prepare("SELECT id FROM app_users WHERE username = ?")
-    .get<{ id: string }>(cleanUsername);
+    .prepare("SELECT id FROM app_users WHERE username = ? OR email = ?")
+    .get<{ id: string }>(cleanUsername, cleanUsername);
   if (usernameClash) {
-    return NextResponse.json({ error: "This username already exists" }, { status: 409 });
+    return NextResponse.json({ error: "This username is not available" }, { status: 409 });
   }
 
   const now = new Date().toISOString();
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
   await db.prepare(
     `INSERT INTO app_users (id, username, email, name, role, is_active, password_hash, created_at, updated_at)
      VALUES (?, ?, ?, ?, 'admin', 1, ?, ?, ?)`
-  ).run(newId, cleanUsername, cleanEmail, cleanUsername, hashPassword(String(password).trim()), now, now);
+  ).run(newId, cleanUsername, cleanEmail, cleanName, hashPassword(String(password).trim()), now, now);
 
   await db.prepare("DELETE FROM otp_requests WHERE contact = ?").run(cleanEmail);
 

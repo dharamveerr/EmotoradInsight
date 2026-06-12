@@ -199,6 +199,8 @@ export default function UserManagementPage() {
     return () => clearTimeout(t);
   }, [warning]);
 
+  const { data: meData } = useSWR<{ role: string }>("/api/me", fetcher);
+  const isSuperAdmin = meData?.role === "super_admin";
   const { data: usersData } = useSWR<{ users: AppUser[] }>("/api/users", fetcher);
   const { data: sessionsData } = useSWR<{ sessions: LoginSession[] }>(
     tab === "sessions" ? "/api/users/sessions" : null,
@@ -379,8 +381,9 @@ export default function UserManagementPage() {
                           {formatDate(u.last_login)}
                         </td>
 
-                        {/* Actions */}
+                        {/* Actions — delete only for Super Admin */}
                         <td className="px-5 py-4">
+                          {isSuperAdmin && (
                           <button
                             onClick={() => deleteUser(u)}
                             className="text-gray-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10"
@@ -390,6 +393,7 @@ export default function UserManagementPage() {
                               <path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2" />
                             </svg>
                           </button>
+                          )}
                         </td>
                       </tr>
                     ))}

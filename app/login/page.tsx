@@ -68,7 +68,7 @@ function OtpInput({ value, onChange, disabled }: { value: string; onChange: (v: 
 function EmotoradLogo() {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/emotorad-logo.png" alt="Emotorad" className="w-20 h-20 select-none" />
+    <img src="/chatbot-logo-full.png" alt="Chatbot.team" className="h-14 w-auto select-none" />
   );
 }
 
@@ -93,6 +93,8 @@ function LoginInner() {
   const [signupUsername, setSignupUsername] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [signupName, setSignupName] = useState("");
+  const [usernameError, setUsernameError] = useState("");
   const [signupBusy, setSignupBusy] = useState(false);
   // Forgot password flow: "" = off, "request" = ask identifier, "reset" = enter code + new password
   const [forgotStep, setForgotStep] = useState<"" | "request" | "reset">("");
@@ -207,8 +209,22 @@ function LoginInner() {
     await requestSignupCode();
   }
 
+  async function checkUsername(val: string) {
+    if (!val.trim()) { setUsernameError(""); return; }
+    try {
+      const res = await fetch("/api/auth/check-username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: val }),
+      });
+      const data = await res.json();
+      setUsernameError(data.available ? "" : (data.error || "Username taken"));
+    } catch { /* ignore */ }
+  }
+
   async function handleSignupComplete(e: React.FormEvent) {
     e.preventDefault();
+    if (usernameError) return;
     setSignupBusy(true);
     setError("");
     let publicIp: string | null = null;
@@ -225,6 +241,7 @@ function LoginInner() {
         code: signupCode,
         username: signupUsername,
         password: signupPassword,
+        name: signupName,
         publicIp,
       }),
     });
@@ -496,15 +513,25 @@ function LoginInner() {
                 </div>
               ) : (
                 <form onSubmit={handleSignupComplete} className="space-y-3">
-                  <input
-                    type="text"
-                    value={signupUsername}
-                    onChange={(e) => setSignupUsername(e.target.value)}
-                    className="w-full bg-transparent border border-white/20 rounded-full px-5 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
-                    placeholder="Username (optional — email used if blank)"
-                    autoComplete="off"
-                    autoFocus
-                  />
+                  <div>
+                    <input
+                      type="text"
+                      value={signupUsername}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\s+/g, '');
+                        setSignupUsername(v);
+                        setUsernameError("");
+                      }}
+                      onBlur={() => checkUsername(signupUsername)}
+                      className={`w-full bg-transparent border rounded-full px-5 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition ${usernameError ? 'border-red-500/60 focus:border-red-500 focus:ring-red-500/30' : 'border-white/20 focus:border-blue-500 focus:ring-blue-500/30'}`}
+                      placeholder="Username (optional — email used if blank)"
+                      autoComplete="off"
+                      autoFocus
+                    />
+                    {usernameError && (
+                      <p className="text-red-400 text-xs mt-1.5 px-2">{usernameError}</p>
+                    )}
+                  </div>
                   <div className="relative">
                     <input
                       type={showSignupPassword ? "text" : "password"}

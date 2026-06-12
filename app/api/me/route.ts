@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     id: user?.id || "",
-    username,
+    username: user?.username || username,
     role,
     name: user?.name || username,
     email: user?.email || null,
@@ -67,8 +67,8 @@ export async function PATCH(req: NextRequest) {
   // Username must be unique
   if (body.username?.trim()) {
     const clash = await db
-      .prepare("SELECT id FROM app_users WHERE username = ? AND id != ?")
-      .get<{ id: string }>(body.username.trim(), user.id);
+      .prepare("SELECT id FROM app_users WHERE (username = ? OR email = ?) AND id != ?")
+      .get<{ id: string }>(body.username.trim(), body.username.trim(), user.id);
     if (clash) return NextResponse.json({ error: "This username already exists" }, { status: 409 });
   }
 

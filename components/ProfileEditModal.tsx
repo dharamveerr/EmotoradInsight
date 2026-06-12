@@ -20,6 +20,7 @@ export default function ProfileEditModal({ user, isOpen, onClose }: ProfileEditM
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState(user.picture || "");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -74,7 +75,27 @@ export default function ProfileEditModal({ user, isOpen, onClose }: ProfileEditM
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    if (name === "username") {
+      setFormData((prev) => ({ ...prev, username: value.replace(/\s+/g, "") }));
+      setUsernameError(null);
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const checkUsername = async () => {
+    const val = formData.username.trim();
+    if (!val || val === user.username) { setUsernameError(null); return; }
+    try {
+      const res = await fetch("/api/auth/check-username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: val }),
+      });
+      const data = await res.json();
+      if (!data.available) setUsernameError(data.error || "Username not available");
+      else setUsernameError(null);
+    } catch { setUsernameError("Could not check username"); }
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,6 +189,7 @@ export default function ProfileEditModal({ user, isOpen, onClose }: ProfileEditM
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (usernameError) return;
     setSaving(true);
     setError(null);
 
@@ -311,10 +333,14 @@ export default function ProfileEditModal({ user, isOpen, onClose }: ProfileEditM
                 name="username"
                 value={formData.username}
                 onChange={handleChange}
-                className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/10"
+                onBlur={checkUsername}
+                className={`w-full bg-slate-800/50 border rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 ${usernameError ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20" : "border-white/10 focus:border-white/30 focus:ring-white/10"}`}
                 placeholder="username"
                 autoComplete="off"
               />
+              {usernameError && (
+                <p className="text-xs text-red-400 mt-1">{usernameError}</p>
+              )}
             </div>
 
             <div>
@@ -366,7 +392,7 @@ export default function ProfileEditModal({ user, isOpen, onClose }: ProfileEditM
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !!usernameError}
               className="flex-1 px-3 py-2 rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-medium transition-colors"
             >
               {saving ? "Saving..." : "Save"}
