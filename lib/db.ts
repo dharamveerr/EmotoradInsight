@@ -206,14 +206,83 @@ async function initDb(): Promise<DB> {
       structure TEXT NOT NULL,
       status TEXT DEFAULT 'draft',
       published_at TEXT,
+      tree_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_journey_status ON journeys(status)`,
+
+    `CREATE TABLE IF NOT EXISTS trees (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      status TEXT DEFAULT 'draft',
+      published_at TEXT,
+      client_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_trees_status ON trees(status)`,
+
+    `CREATE TABLE IF NOT EXISTS clients (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_clients_slug ON clients(slug)`,
   ];
 
   for (const stmt of ddl) {
     await client.execute(stmt);
+  }
+
+  // Migrations: add columns that may post-date an existing table.
+  // CREATE INDEX on a missing column throws, so ALTER must run first.
+  const addColumn = async (sql: string) => {
+    try { await client.execute(sql); } catch { /* column exists */ }
+  };
+  await addColumn("ALTER TABLE journeys ADD COLUMN tree_id TEXT");
+  await addColumn("ALTER TABLE trees ADD COLUMN client_id TEXT");
+  await addColumn("ALTER TABLE app_users ADD COLUMN client_id TEXT");
+  await addColumn("ALTER TABLE events ADD COLUMN client_id TEXT");
+  // Source identity for N8N-ingested events (idempotent upserts)
+  await addColumn("ALTER TABLE events ADD COLUMN source_id TEXT");
+  // External tenant identity used to pull data from the source Postgres
+  await addColumn("ALTER TABLE clients ADD COLUMN org_id TEXT");
+  await addColumn("ALTER TABLE clients ADD COLUMN source_client_id TEXT");
+  await addColumn("ALTER TABLE clients ADD COLUMN subdomain TEXT");
+  await addColumn("ALTER TABLE clients ADD COLUMN last_synced_at TEXT");
+  await client.execute("CREATE INDEX IF NOT EXISTS idx_journey_tree ON journeys(tree_id)");
+  await client.execute("CREATE INDEX IF NOT EXISTS idx_trees_client ON trees(client_id)");
+  await client.execute("CREATE INDEX IF NOT EXISTS idx_app_users_client ON app_users(client_id)");
+  await client.execute("CREATE INDEX IF NOT EXISTS idx_events_client ON events(client_id)");
+  // Dedup ingested rows; partial-style uniqueness (NULL source_id rows allowed many)
+  await client.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_source ON events(source_id) WHERE source_id IS NOT NULL");
+  await client.execute("CREATE INDEX IF NOT EXISTS idx_clients_source ON clients(org_id, source_client_id)");
+
+  // One-time backfill: single-tenant data predates clients. If no clients
+  // exist yet but there is tree/event data, fold it all into a default
+  // "Emotorad" client so nothing is orphaned.
+  const clientCount = Number(
+    ((await client.execute("SELECT COUNT(*) as c FROM clients")).rows[0] as unknown as { c: number }).c
+  );
+  if (clientCount === 0) {
+    const treeRows = Number(((await client.execute("SELECT COUNT(*) as c FROM trees")).rows[0] as unknown as { c: number }).c);
+    const eventRows = Number(((await client.execute("SELECT COUNT(*) as c FROM events")).rows[0] as unknown as { c: number }).c);
+    if (treeRows > 0 || eventRows > 0) {
+      const cid = uuidv4();
+      const now = new Date().toISOString();
+      await client.execute({
+        sql: "INSERT INTO clients (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        args: [cid, "Emotorad", "emotorad", now, now],
+      });
+      await client.execute({ sql: "UPDATE trees SET client_id = ? WHERE client_id IS NULL", args: [cid] });
+      await client.execute({ sql: "UPDATE events SET client_id = ? WHERE client_id IS NULL", args: [cid] });
+      // Existing client admins were implicitly Emotorad; super_admin stays global (null)
+      await client.execute({ sql: "UPDATE app_users SET client_id = ? WHERE client_id IS NULL AND role != 'super_admin'", args: [cid] });
+    }
   }
 
   // Seed super_admin from env vars if no users exist yet

@@ -24,6 +24,9 @@ function OptionRow({
   stepId,
   level,
   variables,
+  clipboard,
+  onCopyVars,
+  onPasteVars,
   onUpdateOption,
   onDeleteOption,
 }: {
@@ -31,6 +34,9 @@ function OptionRow({
   stepId: string;
   level: number;
   variables: Variable[];
+  clipboard: string[];
+  onCopyVars: (ids: string[]) => void;
+  onPasteVars: (stepId: string, optionId: string) => void;
   onUpdateOption: (stepId: string, optionId: string, updates: Partial<JourneyOption>) => void;
   onDeleteOption: (stepId: string, optionId: string) => void;
 }) {
@@ -207,13 +213,31 @@ function OptionRow({
         </div>
       </div>
 
-      <button
-        onClick={() => onDeleteOption(stepId, option.id)}
-        className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors opacity-0 group-hover:opacity-100 mt-0.5"
-        title="Delete option"
-      >
-        ✕
-      </button>
+      <div className="flex gap-1 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => onCopyVars(selectedIds)}
+          disabled={selectedIds.length === 0}
+          className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 transition-colors disabled:opacity-30 whitespace-nowrap"
+          title="Copy this option's variables"
+        >
+          ⧉ Copy
+        </button>
+        <button
+          onClick={() => onPasteVars(stepId, option.id)}
+          disabled={clipboard.length === 0}
+          className="text-xs px-2 py-1 bg-green-500/20 text-green-300 rounded hover:bg-green-500/30 transition-colors disabled:opacity-30 whitespace-nowrap"
+          title={clipboard.length ? `Paste ${clipboard.length} variable(s)` : "Copy variables first"}
+        >
+          ⤓ Paste
+        </button>
+        <button
+          onClick={() => onDeleteOption(stepId, option.id)}
+          className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors"
+          title="Delete option"
+        >
+          ✕
+        </button>
+      </div>
     </div>
   );
 }
@@ -222,6 +246,9 @@ function StepRow({
   step,
   level,
   variables,
+  clipboard,
+  onCopyVars,
+  onPasteVars,
   onUpdateStep,
   onDeleteStep,
   onAddOption,
@@ -232,6 +259,9 @@ function StepRow({
   step: JourneyStep;
   level: number;
   variables: Variable[];
+  clipboard: string[];
+  onCopyVars: (ids: string[]) => void;
+  onPasteVars: (stepId: string, optionId: string) => void;
   onUpdateStep: (stepId: string, updates: Partial<JourneyStep>) => void;
   onDeleteStep: (stepId: string) => void;
   onAddOption: (stepId: string) => void;
@@ -305,6 +335,9 @@ function StepRow({
               stepId={step.id}
               level={level + 1}
               variables={variables}
+              clipboard={clipboard}
+              onCopyVars={onCopyVars}
+              onPasteVars={onPasteVars}
               onUpdateOption={onUpdateOption}
               onDeleteOption={onDeleteOption}
             />
@@ -324,6 +357,9 @@ function StepRow({
               step={child}
               level={level + 1}
               variables={variables}
+              clipboard={clipboard}
+              onCopyVars={onCopyVars}
+              onPasteVars={onPasteVars}
               onUpdateStep={onUpdateStep}
               onDeleteStep={onDeleteStep}
               onAddOption={onAddOption}
@@ -417,6 +453,26 @@ export default function JourneyBuilder({
     })),
   });
 
+  // Copy/paste variable sets between options. Paste merges (no dupes).
+  const [varClipboard, setVarClipboard] = useState<string[]>([]);
+
+  const pasteVarsToOption = (
+    j: Journey,
+    stepId: string,
+    optionId: string
+  ): Journey => ({
+    ...j,
+    steps: mapStepTree(j.steps, stepId, (s) => ({
+      ...s,
+      options: s.options.map((opt) => {
+        if (opt.id !== optionId) return opt;
+        const current = getOptionVariableIds(opt);
+        const merged = [...new Set([...current, ...varClipboard])];
+        return { ...opt, storesInVariables: merged, storesInVariable: merged[0] || "" };
+      }),
+    })),
+  });
+
   const addChildStepToParent = (j: Journey, parentId: string): Journey => {
     const newChild: JourneyStep = {
       id: uuidv4(),
@@ -488,6 +544,20 @@ export default function JourneyBuilder({
         <p className="text-xs text-gray-500 mt-1">
           Drag variables to add steps. {journey.steps.length} step(s)
         </p>
+        {varClipboard.length > 0 && (
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-blue-300">
+              📋 Copied {varClipboard.length} variable(s) — hover an option, click Paste
+            </span>
+            <button
+              onClick={() => setVarClipboard([])}
+              className="text-xs text-gray-500 hover:text-red-300"
+              title="Clear clipboard"
+            >
+              clear
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Steps */}
@@ -509,6 +579,11 @@ export default function JourneyBuilder({
               step={step}
               level={0}
               variables={variables}
+              clipboard={varClipboard}
+              onCopyVars={(ids) => setVarClipboard(ids)}
+              onPasteVars={(stepId, optionId) => {
+                onJourneyChange(pasteVarsToOption(journey, stepId, optionId));
+              }}
               onUpdateStep={(stepId, updates) => {
                 onJourneyChange(updateStepInJourney(journey, stepId, updates));
               }}

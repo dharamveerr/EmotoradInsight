@@ -6,7 +6,7 @@ import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
 import DateRangePicker from "@/components/DatePicker";
-import { JOURNEY_LABELS, JOURNEY_STEPS } from "@/lib/types";
+import { useJourneyConfig } from "@/lib/useJourneyConfig";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -23,6 +23,7 @@ const toLocalDate = () => { const d = new Date(); return `${d.getFullYear()}-${S
 
 export default function HeatmapPage() {
   const today = toLocalDate();
+  const { labels: JOURNEY_LABELS, steps: JOURNEY_STEPS } = useJourneyConfig();
   const [journey, setJourney, resetJourney] = usePersistentState("filter:heatmap:journey", "");
   const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:heatmap:from", "");
   const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:heatmap:to",   "");

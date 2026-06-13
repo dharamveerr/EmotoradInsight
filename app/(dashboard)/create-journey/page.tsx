@@ -1,41 +1,119 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { mutate as swrMutate } from "swr";
 import Topbar from "@/components/Topbar";
+import TreePanel, { Tree } from "@/components/TreePanel";
 import JourneyList from "@/components/JourneyList";
 import JourneyBuilder from "@/components/JourneyBuilder";
 import VariableManager from "@/components/VariableManager";
-import { Journey, Variable, JourneyStep } from "@/lib/types";
+import { Journey, Variable } from "@/lib/types";
 import { v4 as uuidv4 } from "uuid";
 
-export default function CreateJourneyPage() {
-  const [journeys, setJourneys] = useState<Journey[]>([]);
+export default function CreateTreePage() {
+  const [selectedTree, setSelectedTree] = useState<Tree | null>(null);
   const [variables, setVariables] = useState<Variable[]>([]);
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null);
   const [currentJourney, setCurrentJourney] = useState<Journey | null>(null);
   const [draggedVariable, setDraggedVariable] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Undo/redo history for the journey being edited
+  const [past, setPast] = useState<Journey[]>([]);
+  const [future, setFuture] = useState<Journey[]>([]);
+  const canUndo = past.length > 0;
+  const canRedo = future.length > 0;
   const [journeyName, setJourneyName] = useState("");
 
-  // Load journeys and variables on mount
   useEffect(() => {
-    fetchJourneys();
     fetchVariables();
   }, []);
-
-  async function fetchJourneys() {
-    const res = await fetch("/api/journeys");
-    const data = await res.json();
-    setJourneys(data.journeys || []);
-  }
 
   async function fetchVariables() {
     const res = await fetch("/api/variables");
     const data = await res.json();
-    setVariables(data.variables || []);
+    // Merge custom + data-discovered @ vars so any var stored on an option
+    // resolves to a chip in the builder. Discovered vars use their name as id.
+    const custom: Variable[] = data.variables || [];
+    const now = new Date().toISOString();
+    const discovered: Variable[] = (data.discovered || []).map((d: { name: string }) => ({
+      id: d.name,
+      name: d.name,
+      created_at: now,
+      updated_at: now,
+    }));
+    setVariables([...custom, ...discovered]);
+  }
+
+  function refreshTreeData() {
+    swrMutate("/api/trees");
+    if (selectedTree) swrMutate(`/api/journeys?tree_id=${selectedTree.id}`);
+  }
+
+  function resetHistory() {
+    setPast([]);
+    setFuture([]);
+  }
+
+  // Edits from the builder push the previous state onto the undo stack.
+  const editJourney = useCallback((next: Journey) => {
+    setCurrentJourney((prev) => {
+      if (prev) setPast((p) => [...p, prev]);
+      return next;
+    });
+    setFuture([]);
+  }, []);
+
+  const undo = useCallback(() => {
+    setPast((p) => {
+      if (p.length === 0) return p;
+      const prev = p[p.length - 1];
+      setCurrentJourney((cur) => {
+        if (cur) setFuture((f) => [cur, ...f]);
+        return prev;
+      });
+      return p.slice(0, -1);
+    });
+  }, []);
+
+  const redo = useCallback(() => {
+    setFuture((f) => {
+      if (f.length === 0) return f;
+      const next = f[0];
+      setCurrentJourney((cur) => {
+        if (cur) setPast((p) => [...p, cur]);
+        return next;
+      });
+      return f.slice(1);
+    });
+  }, []);
+
+  // Keyboard: Cmd/Ctrl+Z undo, Cmd/Ctrl+Shift+Z (or Ctrl+Y) redo
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
+  function handleSelectTree(tree: Tree | null) {
+    setSelectedTree(tree);
+    setSelectedJourneyId(null);
+    setCurrentJourney(null);
+    setJourneyName("");
+    resetHistory();
   }
 
   function createNewJourney() {
+    if (!selectedTree) {
+      alert("Select or create a tree first");
+      return;
+    }
     const newId = uuidv4();
     const newJourney: Journey = {
       id: newId,
@@ -49,16 +127,14 @@ export default function CreateJourneyPage() {
     setCurrentJourney(newJourney);
     setSelectedJourneyId(null);
     setJourneyName("Untitled Journey");
+    resetHistory();
   }
 
   async function loadJourney(id: string) {
     try {
       setSelectedJourneyId(id);
-      console.log("Loading journey:", id);
 
       const res = await fetch(`/api/journeys/${id}`);
-      console.log("Response status:", res.status);
-
       if (!res.ok) {
         let errMessage = res.statusText;
         try {
@@ -67,18 +143,13 @@ export default function CreateJourneyPage() {
         } catch {
           // If response is not JSON, use status text
         }
-        console.error("API Error:", errMessage);
         alert(`Failed to load journey: ${errMessage}`);
         return;
       }
 
       const data = await res.json();
-      console.log("Journey data:", data);
-
       const journeyData = data.journey;
-
       if (!journeyData) {
-        console.error("No journey data in response");
         alert("Journey not found");
         return;
       }
@@ -94,17 +165,20 @@ export default function CreateJourneyPage() {
         created_at: journeyData.created_at,
         updated_at: journeyData.updated_at,
       };
-      console.log("Setting current journey:", fullJourney);
       setCurrentJourney(fullJourney);
+      resetHistory();
     } catch (error) {
-      console.error("Error loading journey:", error);
       alert(`Error loading journey: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   async function saveCurrentJourney() {
-    if (!currentJourney || !journeyName) {
+    if (!currentJourney || !journeyName.trim()) {
       alert("Journey name required");
+      return;
+    }
+    if (!selectedTree) {
+      alert("Select a tree first");
       return;
     }
 
@@ -117,31 +191,37 @@ export default function CreateJourneyPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             id: selectedJourneyId,
-            name: journeyName,
+            name: journeyName.trim(),
             description: currentJourney.description,
             steps: currentJourney.steps,
           }),
         });
         if (res.ok) {
-          await fetchJourneys();
+          refreshTreeData();
           alert("Journey updated");
+        } else {
+          const data = await res.json();
+          alert(data.error || "Failed to update journey");
         }
       } else {
-        // Create new
+        // Create new inside the selected tree
         const res = await fetch("/api/journeys", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: journeyName,
+            name: journeyName.trim(),
             description: currentJourney.description,
             steps: currentJourney.steps,
+            tree_id: selectedTree.id,
           }),
         });
+        const data = await res.json();
         if (res.ok) {
-          const data = await res.json();
           setSelectedJourneyId(data.id);
-          await fetchJourneys();
+          refreshTreeData();
           alert("Journey saved");
+        } else {
+          alert(data.error || "Failed to save journey");
         }
       }
     } finally {
@@ -149,48 +229,52 @@ export default function CreateJourneyPage() {
     }
   }
 
-  async function publishJourney(id: string) {
-    const res = await fetch(`/api/journeys/${id}/publish`, {
-      method: "POST",
-    });
-    if (res.ok) {
-      await fetchJourneys();
-      alert("Journey published!");
-    }
-  }
-
-  async function deleteJourney(id: string) {
-    const res = await fetch("/api/journeys", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    if (res.ok) {
-      await fetchJourneys();
+  function deleteJourneyLocal(id: string) {
+    if (selectedJourneyId === id) {
       setCurrentJourney(null);
       setSelectedJourneyId(null);
+      setJourneyName("");
     }
+    swrMutate("/api/trees");
   }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Topbar title="Create Journey" subtitle="Build customer journey flows with variables" />
+      <Topbar
+        title="Create Tree"
+        subtitle="A tree holds your journeys — publish it to power the dashboard"
+      />
 
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Journey name input + controls */}
         <div className="flex items-center gap-3 px-7 py-4 border-b border-white/10 bg-white/3">
+          <div className="flex items-center gap-2 text-sm text-gray-400 shrink-0">
+            <span className="text-base">🌳</span>
+            <span className="font-semibold text-gray-200">
+              {selectedTree ? selectedTree.name : "No tree selected"}
+            </span>
+            {selectedTree?.status === "published" && (
+              <span className="text-xs px-2 py-0.5 rounded font-semibold bg-green-500/40 text-green-200 border border-green-500/50">
+                ✓ Live
+              </span>
+            )}
+            <span className="text-gray-600 mx-1">/</span>
+          </div>
+
           <input
             type="text"
             value={journeyName}
             onChange={(e) => setJourneyName(e.target.value)}
-            placeholder="Journey name…"
-            className="glass rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/40 flex-1"
+            placeholder={selectedTree ? "Journey name…" : "Select a tree first"}
+            disabled={!selectedTree}
+            className="glass rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/40 flex-1 disabled:opacity-50"
           />
 
           <button
             onClick={createNewJourney}
-            className="px-4 py-2 text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all"
+            disabled={!selectedTree}
+            className="px-4 py-2 text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all disabled:opacity-40"
           >
             New
           </button>
@@ -204,41 +288,43 @@ export default function CreateJourneyPage() {
           </button>
 
           <button
-            onClick={() => {
-              if (currentJourney) {
-                setCurrentJourney({
-                  ...currentJourney,
-                  steps: [],
-                });
-              }
-            }}
-            className="px-4 py-2 text-xs font-semibold bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg hover:bg-gray-500/30 transition-all"
+            onClick={undo}
+            disabled={!canUndo}
+            className="px-4 py-2 text-xs font-semibold bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg hover:bg-gray-500/30 transition-all disabled:opacity-40"
+            title="Undo (⌘Z)"
           >
-            Reset
+            ↶ Undo
+          </button>
+
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            className="px-4 py-2 text-xs font-semibold bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg hover:bg-gray-500/30 transition-all disabled:opacity-40"
+            title="Redo (⌘⇧Z)"
+          >
+            ↷ Redo
           </button>
         </div>
 
-        {/* Three-column layout */}
+        {/* Four-column layout: Trees | Journeys | Builder | Variables */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Left: Journey List */}
+          <TreePanel selectedTreeId={selectedTree?.id || null} onSelectTree={handleSelectTree} />
+
           <JourneyList
+            treeId={selectedTree?.id || null}
             selectedJourneyId={selectedJourneyId}
             onSelectJourney={loadJourney}
             onNewJourney={createNewJourney}
-            onPublishJourney={publishJourney}
-            onDeleteJourney={deleteJourney}
-            onRefresh={fetchJourneys}
+            onDeleteJourney={deleteJourneyLocal}
           />
 
-          {/* Center: Journey Builder */}
           <JourneyBuilder
             journey={currentJourney}
             variables={variables}
             draggedVariable={draggedVariable}
-            onJourneyChange={setCurrentJourney}
+            onJourneyChange={editJourney}
           />
 
-          {/* Right: Variable Manager */}
           <VariableManager onDragStart={setDraggedVariable} />
         </div>
       </main>

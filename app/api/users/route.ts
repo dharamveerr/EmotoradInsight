@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
   const users = await db
     .prepare(
       `SELECT u.id, u.username, u.email, u.name, u.picture, u.role, u.is_active, u.created_at,
+       u.client_id, (SELECT name FROM clients c WHERE c.id = u.client_id) AS client_name,
        (SELECT timestamp FROM login_sessions WHERE identifier = COALESCE(u.username, u.email) AND action = 'login' ORDER BY timestamp DESC LIMIT 1) AS last_login
        FROM app_users u ORDER BY u.created_at ASC`
     )
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   const body = await req.json();
-  const { username, email, name, password, role } = body;
+  const { username, email, name, password, role, client_id } = body;
 
   if (!password) {
     return NextResponse.json({ error: "Password required" }, { status: 400 });
@@ -49,9 +50,9 @@ export async function POST(req: NextRequest) {
 
   try {
     await db.prepare(
-      `INSERT INTO app_users (id, username, email, name, role, is_active, password_hash, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`
-    ).run(uuidv4(), username || null, email || null, name || username || email, role, hashPassword(password), now, now);
+      `INSERT INTO app_users (id, username, email, name, role, is_active, password_hash, client_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`
+    ).run(uuidv4(), username || null, email || null, name || username || email, role, hashPassword(password), client_id || null, now, now);
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {

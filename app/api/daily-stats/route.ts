@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import getDb from "@/lib/db";
-import { JOURNEY_STEPS } from "@/lib/types";
+import { getJourneyConfig } from "@/lib/journey-config";
+import { getActiveClientId } from "@/lib/client-context";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = await getDb();
+  const { steps: JOURNEY_STEPS } = await getJourneyConfig();
+  const clientId = await getActiveClientId();
+  const cf = clientId ? "WHERE client_id = ?" : "";
+  const cp: string[] = clientId ? [clientId] : [];
 
-  // Get all user-journey sessions grouped by date
+  // Get all user-journey sessions grouped by date (scoped to active client)
   const rows = await db
     .prepare(`
       SELECT
@@ -19,10 +24,11 @@ export async function GET(req: NextRequest) {
         MAX(step) as lastStep,
         COUNT(*) as stepCount
       FROM events
+      ${cf}
       GROUP BY DATE(timestamp), userId, journey
       ORDER BY date DESC
     `)
-    .all<{ date: string; userId: string; journey: string; lastStep: string; stepCount: number }>();
+    .all<{ date: string; userId: string; journey: string; lastStep: string; stepCount: number }>(...cp);
 
   // Calculate daily stats grouped by date and journey
   const dailyMap = new Map<string, Map<string, { reach: Set<string>; completed: number; total: number }>>();

@@ -36,5 +36,7 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|api/auth|api/webhook|_next|.*\\.).*)"],
+  // api/webhook + api/sync are machine endpoints (N8N) authed by their own
+  // shared secret — exclude them from the cookie-based auth proxy.
+  matcher: ["/((?!login|api/auth|api/webhook|api/sync|_next|.*\\.).*)"],
 };

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import getDb from "@/lib/db";
-import { JOURNEY_STEPS } from "@/lib/types";
+import { getJourneyConfig } from "@/lib/journey-config";
+import { getActiveClientId } from "@/lib/client-context";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { steps: JOURNEY_STEPS } = await getJourneyConfig();
+  const clientId = await getActiveClientId();
 
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId");
@@ -15,12 +19,15 @@ export async function GET(req: NextRequest) {
   const exportFormat = searchParams.get("export"); // "csv" | "excel"
 
   const db = await getDb();
+  // Client scoping (alias `e` for the joined list query, plain for the rest)
+  const cf = clientId ? " AND client_id = ?" : "";
+  const cp: string[] = clientId ? [clientId] : [];
 
   // ── Single session detail ──────────────────────────────────────────
   if (userId && journey) {
     const events = await db
-      .prepare("SELECT step, timestamp, metadata FROM events WHERE userId = ? AND journey = ? ORDER BY timestamp ASC")
-      .all<{ step: string; timestamp: string; metadata: string | null }>(userId, journey);
+      .prepare(`SELECT step, timestamp, metadata FROM events WHERE userId = ? AND journey = ?${cf} ORDER BY timestamp ASC`)
+      .all<{ step: string; timestamp: string; metadata: string | null }>(userId, journey, ...cp);
 
     const steps = events.map((e) => {
       let meta: Record<string, string> = {};
@@ -32,8 +39,10 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Session list ───────────────────────────────────────────────────
-  const dateWhere = from && to ? "WHERE date(e.timestamp) BETWEEN ? AND ?" : "";
-  const dateParams: string[] = from && to ? [from, to] : [];
+  const dateClause = from && to ? "date(e.timestamp) BETWEEN ? AND ?" : "";
+  const parts = [dateClause, clientId ? "e.client_id = ?" : ""].filter(Boolean);
+  const listWhere = parts.length ? "WHERE " + parts.join(" AND ") : "";
+  const listParams: string[] = [...(from && to ? [from, to] : []), ...cp];
 
   const rows = await db
     .prepare(`
@@ -46,7 +55,7 @@ export async function GET(req: NextRequest) {
          WHERE e2.userId = e.userId AND e2.journey = e.journey
          ORDER BY e2.timestamp ASC LIMIT 1) as firstMeta
       FROM events e
-      ${dateWhere}
+      ${listWhere}
       GROUP BY userId, journey
       ORDER BY startTime DESC
       LIMIT 2000
@@ -54,7 +63,7 @@ export async function GET(req: NextRequest) {
     .all<{
       userId: string; journey: string; startTime: string;
       stepCount: number; lastStep: string; firstMeta: string | null;
-    }>(...dateParams);
+    }>(...listParams);
 
   const sessions = rows.map((r) => {
     const steps = JOURNEY_STEPS[r.journey] || [];
@@ -82,9 +91,10 @@ export async function GET(req: NextRequest) {
       .prepare(`
         SELECT userId, journey, step, timestamp, metadata
         FROM events
+        ${clientId ? "WHERE client_id = ?" : ""}
         ORDER BY userId, journey, timestamp ASC
       `)
-      .all<{ userId: string; journey: string; step: string; timestamp: string; metadata: string | null }>();
+      .all<{ userId: string; journey: string; step: string; timestamp: string; metadata: string | null }>(...cp);
 
     // Collect all unique metadata keys
     const allKeys = new Set<string>();

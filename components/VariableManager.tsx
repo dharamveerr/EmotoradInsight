@@ -14,6 +14,7 @@ interface VariableManagerProps {
 export default function VariableManager({ onDragStart }: VariableManagerProps) {
   const { data, isLoading, mutate } = useSWR("/api/variables", fetcher);
   const variables: Variable[] = data?.variables || [];
+  const discovered: { name: string }[] = data?.discovered || [];
   const [search, setSearch] = useState("");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [newVarName, setNewVarName] = useState("");
@@ -22,6 +23,9 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const filtered = variables.filter((v: Variable) =>
+    v.name.toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredDiscovered = discovered.filter((v) =>
     v.name.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -76,7 +80,12 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
       {/* Header */}
       <div className="p-4 border-b border-white/10 shrink-0">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold text-gray-400 uppercase">Variables</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase">
+            Variables
+            <span className="ml-1.5 text-gray-600 normal-case font-normal">
+              {variables.length + discovered.length}
+            </span>
+          </p>
           <button
             onClick={() => setShowUploadModal(true)}
             className="text-xs px-2 py-1 bg-purple-500/20 text-purple-300 rounded hover:bg-purple-500/30 transition-colors"
@@ -98,10 +107,14 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {isLoading ? (
           <div className="text-xs text-gray-500 text-center py-8">Loading…</div>
-        ) : filtered.length === 0 ? (
+        ) : filtered.length === 0 && filteredDiscovered.length === 0 ? (
           <div className="text-xs text-gray-500 text-center py-8">No variables</div>
         ) : (
-          filtered.map((variable: Variable) => (
+          <>
+          {filtered.length > 0 && (
+            <p className="text-xs text-gray-600 uppercase font-semibold px-1">Custom</p>
+          )}
+          {filtered.map((variable: Variable) => (
             <div
               key={variable.id}
               draggable
@@ -133,7 +146,28 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
               </div>
               <p className="text-xs text-gray-600 text-center mt-1">⋮ drag</p>
             </div>
-          ))
+          ))}
+
+          {filteredDiscovered.length > 0 && (
+            <p className="text-xs text-gray-600 uppercase font-semibold px-1 pt-2">
+              From data
+            </p>
+          )}
+          {filteredDiscovered.map((variable) => (
+            <div
+              key={variable.name}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer?.setData("variable", variable.name);
+                if (onDragStart) onDragStart(variable.name);
+              }}
+              className="p-2 bg-blue-500/15 border border-blue-500/25 rounded cursor-move hover:bg-blue-500/25 transition-colors"
+            >
+              <p className="text-xs font-mono text-blue-300 truncate">{variable.name}</p>
+              <p className="text-xs text-gray-600 text-center mt-1">⋮ drag</p>
+            </div>
+          ))}
+          </>
         )}
       </div>
 

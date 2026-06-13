@@ -1,0 +1,99 @@
+{
+  "name": "EmotoradInsight — chat_log_variable sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "minutes", "minutesInterval": 5 }
+          ]
+        }
+      },
+      "id": "a1111111-1111-1111-1111-111111111111",
+      "name": "Every 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-100, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "f1", "name": "baseUrl", "value": "https://YOUR-APP-DOMAIN", "type": "string" },
+            { "id": "f2", "name": "secret", "value": "dev-n8n-secret-change-me", "type": "string" },
+            { "id": "f3", "name": "org_id", "value": "ORG_LEV", "type": "string" },
+            { "id": "f4", "name": "client_id", "value": "CL_LEV", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a2222222-2222-2222-2222-222222222222",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [120, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.baseUrl }}/api/sync/cursor?org_id={{ $json.org_id }}&client_id={{ $json.client_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-secret", "value": "={{ $json.secret }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a3333333-3333-3333-3333-333333333333",
+      "name": "Get cursor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM chat_log_variable\nWHERE org_id = '{{ $('Config').item.json.org_id }}'\n  AND client_id = '{{ $('Config').item.json.client_id }}'\n  AND created_at > '{{ $json.cursor }}'\nORDER BY created_at ASC\nLIMIT 500;",
+        "options": {}
+      },
+      "id": "a4444444-4444-4444-4444-444444444444",
+      "name": "Get rows",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [600, 300],
+      "credentials": {
+        "postgres": { "id": "REPLACE_WITH_PG_CREDENTIAL_ID", "name": "Source Postgres" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.baseUrl }}/api/webhook/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-secret", "value": "={{ $('Config').item.json.secret }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ org_id: $('Config').item.json.org_id, client_id: $('Config').item.json.client_id, rows: $('Get rows').all().map(i => i.json) }) }}",
+        "options": {}
+      },
+      "id": "a5555555-5555-5555-5555-555555555555",
+      "name": "Push to app",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [840, 300]
+    }
+  ],
+  "connections": {
+    "Every 5 min": { "main": [[{ "node": "Config", "type": "main", "index": 0 }]] },
+    "Config": { "main": [[{ "node": "Get cursor", "type": "main", "index": 0 }]] },
+    "Get cursor": { "main": [[{ "node": "Get rows", "type": "main", "index": 0 }]] },
+    "Get rows": { "main": [[{ "node": "Push to app", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

@@ -5,7 +5,7 @@ import { usePersistentState } from "@/lib/usePersistentState";
 import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import DateRangePicker from "@/components/DatePicker";
-import { JOURNEY_LABELS, JOURNEY_STEPS } from "@/lib/types";
+import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -58,6 +58,7 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export default function OverviewPage() {
   const today = toLocalDateString();
+  const { labels: JOURNEY_LABELS } = useJourneyConfig();
   const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:overview:from", today);
   const [toDate, setToDate, resetTo] = usePersistentState("filter:overview:to", today);
   const isDateFiltered = fromDate !== today || toDate !== today;

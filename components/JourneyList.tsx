@@ -7,41 +7,26 @@ import { Journey } from "@/lib/types";
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface JourneyListProps {
+  treeId: string | null;
   selectedJourneyId: string | null;
   onSelectJourney: (id: string) => void;
   onNewJourney: () => void;
-  onPublishJourney: (id: string) => void;
   onDeleteJourney: (id: string) => void;
-  onRefresh: () => void;
 }
 
 export default function JourneyList({
+  treeId,
   selectedJourneyId,
   onSelectJourney,
   onNewJourney,
-  onPublishJourney,
   onDeleteJourney,
-  onRefresh,
 }: JourneyListProps) {
-  const { data, isLoading } = useSWR("/api/journeys", fetcher);
+  const { data, isLoading, mutate } = useSWR(
+    treeId ? `/api/journeys?tree_id=${treeId}` : null,
+    fetcher
+  );
   const journeys: Journey[] = data?.journeys || [];
-  const [publishing, setPublishing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-
-  const handlePublish = async (id: string) => {
-    setPublishing(id);
-    try {
-      const res = await fetch(`/api/journeys/${id}/publish`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        onRefresh();
-        onPublishJourney(id);
-      }
-    } finally {
-      setPublishing(null);
-    }
-  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this journey?")) return;
@@ -54,7 +39,7 @@ export default function JourneyList({
         body: JSON.stringify({ id }),
       });
       if (res.ok) {
-        onRefresh();
+        mutate();
         onDeleteJourney(id);
       } else {
         const error = await res.json();
@@ -72,18 +57,25 @@ export default function JourneyList({
         <p className="text-xs font-semibold text-gray-400 uppercase mb-3">Journeys</p>
         <button
           onClick={onNewJourney}
-          className="w-full px-3 py-2 text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded hover:bg-blue-500/30 transition-all"
+          disabled={!treeId}
+          className="w-full px-3 py-2 text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded hover:bg-blue-500/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          + New
+          + New Journey
         </button>
       </div>
 
       {/* Journey List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {isLoading ? (
+        {!treeId ? (
+          <div className="text-xs text-gray-500 text-center py-8 px-2">
+            Select or create a tree first. Journeys live inside a tree.
+          </div>
+        ) : isLoading ? (
           <div className="text-xs text-gray-500 text-center py-8">Loading…</div>
         ) : journeys.length === 0 ? (
-          <div className="text-xs text-gray-500 text-center py-8">No journeys yet</div>
+          <div className="text-xs text-gray-500 text-center py-8 px-2">
+            No journeys in this tree yet
+          </div>
         ) : (
           journeys.map((journey: Journey) => (
             <div
@@ -91,11 +83,7 @@ export default function JourneyList({
               onClick={() => onSelectJourney(journey.id)}
               className={`p-3 rounded border cursor-pointer transition-all group ${
                 selectedJourneyId === journey.id
-                  ? journey.status === "published"
-                    ? "bg-green-500/30 border-green-500/50"
-                    : "bg-blue-500/20 border-blue-500/40"
-                  : journey.status === "published"
-                  ? "bg-green-500/10 border-green-500/30 hover:bg-green-500/20"
+                  ? "bg-blue-500/20 border-blue-500/40"
                   : "bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20"
               }`}
             >
@@ -112,10 +100,7 @@ export default function JourneyList({
                           : "bg-blue-500/40 text-blue-200 border border-blue-500/50"
                       }`}
                     >
-                      {journey.status === "published" ? "✓ Published" : "● Saved"}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {journey.steps?.length || 0} steps
+                      {journey.status === "published" ? "✓ Live" : "● Saved"}
                     </span>
                   </div>
                 </div>
@@ -123,33 +108,17 @@ export default function JourneyList({
 
               {/* Actions */}
               <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                {journey.status === "published" ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm("Unpublish this journey? It will become saved.")) {
-                        handlePublish(journey.id);
-                      }
-                    }}
-                    disabled={publishing === journey.id}
-                    className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 transition-colors disabled:opacity-50"
-                    title="Unpublish to Saved"
-                  >
-                    📥 Unpublish
-                  </button>
-                ) : (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePublish(journey.id);
-                    }}
-                    disabled={publishing === journey.id}
-                    className="text-xs px-2 py-1 bg-green-500/20 text-green-300 rounded hover:bg-green-500/30 transition-colors disabled:opacity-50"
-                    title="Publish"
-                  >
-                    📤 Publish
-                  </button>
-                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(journey.id);
+                  }}
+                  disabled={deleting === journey.id}
+                  className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                  title="Delete journey"
+                >
+                  🗑 Delete
+                </button>
               </div>
             </div>
           ))

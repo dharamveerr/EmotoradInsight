@@ -28,9 +28,19 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  const treeId = searchParams.get("tree_id");
+  if (treeId) {
+    const journeys = await db
+      .prepare(
+        "SELECT id, name, description, status, published_at, tree_id, created_at, updated_at FROM journeys WHERE tree_id = ? ORDER BY created_at ASC"
+      )
+      .all(treeId);
+    return NextResponse.json({ journeys });
+  }
+
   const journeys = await db
     .prepare(
-      "SELECT id, name, description, status, published_at, created_at, updated_at FROM journeys ORDER BY updated_at DESC"
+      "SELECT id, name, description, status, published_at, tree_id, created_at, updated_at FROM journeys ORDER BY updated_at DESC"
     )
     .all();
 
@@ -42,7 +52,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, description, steps } = body;
+  const { name, description, steps, tree_id } = body;
 
   if (!name) {
     return NextResponse.json({ error: "Missing name" }, { status: 400 });
@@ -53,15 +63,28 @@ export async function POST(req: NextRequest) {
   }
 
   const db = await getDb();
+
+  if (tree_id) {
+    const tree = await db.prepare("SELECT id FROM trees WHERE id = ?").get<{ id: string }>(tree_id);
+    if (!tree) return NextResponse.json({ error: "Tree not found" }, { status: 404 });
+
+    const nameClash = await db
+      .prepare("SELECT id FROM journeys WHERE tree_id = ? AND LOWER(name) = LOWER(?)")
+      .get<{ id: string }>(tree_id, String(name).trim());
+    if (nameClash) {
+      return NextResponse.json({ error: "A journey with this name already exists in this tree" }, { status: 409 });
+    }
+  }
+
   const id = uuidv4();
   const now = new Date().toISOString();
 
   const structure = { steps };
 
   await db.prepare(
-    `INSERT INTO journeys (id, name, description, structure, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'draft', ?, ?)`
-  ).run(id, name, description || null, JSON.stringify(structure), now, now);
+    `INSERT INTO journeys (id, name, description, structure, status, tree_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)`
+  ).run(id, name, description || null, JSON.stringify(structure), tree_id || null, now, now);
 
   return NextResponse.json(
     { id, name, status: "draft", created_at: now },

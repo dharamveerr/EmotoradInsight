@@ -6,12 +6,17 @@ import { v4 as uuidv4 } from "uuid";
  * Extract unique variable names from all events metadata
  * Returns sorted list of variable keys found in metadata JSON
  */
-export async function getAllVariablesFromDB(): Promise<string[]> {
+export async function getAllVariablesFromDB(clientId?: string | null): Promise<string[]> {
   const db = await getDb();
 
-  const rows = await db
-    .prepare("SELECT DISTINCT metadata FROM events WHERE metadata IS NOT NULL")
-    .all<{ metadata: string }>();
+  // Scope discovery to the active client's events when one is given
+  const rows = clientId
+    ? await db
+        .prepare("SELECT DISTINCT metadata FROM events WHERE metadata IS NOT NULL AND client_id = ?")
+        .all<{ metadata: string }>(clientId)
+    : await db
+        .prepare("SELECT DISTINCT metadata FROM events WHERE metadata IS NOT NULL")
+        .all<{ metadata: string }>();
 
   const vars = new Set<string>();
 

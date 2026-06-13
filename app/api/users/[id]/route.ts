@@ -40,7 +40,7 @@ export async function PATCH(
     }
   }
 
-  const allowed = ["role", "is_active", "name"] as const;
+  const allowed = ["role", "is_active", "name", "client_id"] as const;
   const updates: string[] = [];
   const values: unknown[] = [];
 
@@ -50,7 +50,7 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid role" }, { status: 400 });
       }
       updates.push(`${key} = ?`);
-      values.push(body[key]);
+      values.push(key === "client_id" ? (body[key] || null) : body[key]);
     }
   }
 

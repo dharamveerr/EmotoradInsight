@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { getActiveClientId } from "@/lib/client-context";
 import {
   getCustomVariables,
+  getAllVariablesFromDB,
   createVariable,
   updateVariable,
   deleteVariable,
@@ -13,7 +15,16 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const variables = await getCustomVariables();
-  return NextResponse.json({ variables });
+
+  // Auto-discover @ variables present in the active client's event metadata.
+  // These appear in the tree's Variables panel alongside manually-added ones.
+  const clientId = await getActiveClientId();
+  const customNames = new Set(variables.map((v) => v.name));
+  const discovered = (await getAllVariablesFromDB(clientId))
+    .filter((name) => name.startsWith("@") && !customNames.has(name))
+    .map((name) => ({ name }));
+
+  return NextResponse.json({ variables, discovered });
 }
 
 export async function POST(req: NextRequest) {

@@ -6,7 +6,7 @@ import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
 import DateRangePicker from "@/components/DatePicker";
-import { JOURNEY_LABELS, JOURNEY_STEPS } from "@/lib/types";
+import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, PieChart, Pie, Cell as PieCell,
@@ -20,6 +20,7 @@ const toLocalDate = () => { const d = new Date(); return `${d.getFullYear()}-${S
 
 export default function ProductInsightsPage() {
   const today = toLocalDate();
+  const { labels: JOURNEY_LABELS, steps: JOURNEY_STEPS } = useJourneyConfig();
   const journeyKeys = Object.keys(JOURNEY_STEPS);
   const [selectedJourney, setSelectedJourney, resetJourney] = usePersistentState("filter:product-insights:journey", "");
   const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:product-insights:from", "");

@@ -6,7 +6,7 @@ import { usePersistentState } from "@/lib/usePersistentState";
 import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import DateRangePicker from "@/components/DatePicker";
-import { JOURNEY_LABELS } from "@/lib/types";
+import { useJourneyConfig } from "@/lib/useJourneyConfig";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -30,6 +30,7 @@ type StepDetail = {
 const HIDDEN_VARS = new Set(["@campaign_id", "@prospectId", "@accessToken", "@first_message"]);
 
 function SessionDetail({ userId, journey, onClose }: { userId: string; journey: string; onClose: () => void }) {
+  const { labels: JOURNEY_LABELS } = useJourneyConfig();
   const { data, isLoading } = useSWR(
     `/api/sessions?userId=${encodeURIComponent(userId)}&journey=${journey}`,
     fetcher
@@ -132,6 +133,7 @@ const toLocalDate = () => { const d = new Date(); return `${d.getFullYear()}-${S
 
 export default function SessionsPage() {
   const today = toLocalDate();
+  const { labels: JOURNEY_LABELS } = useJourneyConfig();
   const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:sessions:from", "");
   const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:sessions:to",   "");
   const isDateFiltered = !!(fromDate && toDate);
