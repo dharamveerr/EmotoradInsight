@@ -171,8 +171,8 @@ export default function TreePanel({ selectedTreeId, onSelectTree }: TreePanelPro
                 <span
                   className={`text-xs px-2 py-0.5 rounded font-semibold ${
                     tree.status === "published"
-                      ? "bg-green-500/40 text-green-200 border border-green-500/50"
-                      : "bg-gray-500/30 text-gray-300 border border-gray-500/40"
+                      ? "ls-live bg-green-500/40 text-green-200 border border-green-500/50"
+                      : "ls-draft bg-gray-500/30 text-gray-300 border border-gray-500/40"
                   }`}
                 >
                   {tree.status === "published" ? "✓ Live" : "● Draft"}

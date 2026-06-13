@@ -255,7 +255,7 @@ export default function CreateTreePage() {
               {selectedTree ? selectedTree.name : "No tree selected"}
             </span>
             {selectedTree?.status === "published" && (
-              <span className="text-xs px-2 py-0.5 rounded font-semibold bg-green-500/40 text-green-200 border border-green-500/50">
+              <span className="ls-live text-xs px-2 py-0.5 rounded font-semibold bg-green-500/40 text-green-200 border border-green-500/50">
                 ✓ Live
               </span>
             )}

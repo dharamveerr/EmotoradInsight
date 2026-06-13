@@ -11,10 +11,27 @@ export async function GET(req: NextRequest) {
   const db = await getDb();
   const { steps: JOURNEY_STEPS } = await getJourneyConfig();
   const clientId = await getActiveClientId();
-  const cf = clientId ? "WHERE client_id = ?" : "";
-  const cp: string[] = clientId ? [clientId] : [];
+  const journey = new URL(req.url).searchParams.get("journey") || "";
 
-  // Get all user-journey sessions grouped by date (scoped to active client)
+  // Compose WHERE: active client + journey scope. A specific journey filters to
+  // it; otherwise restrict to the published tree's journeys (matches the other
+  // reports' "All Journeys" behavior) so non-published data never leaks in.
+  const parts: string[] = [];
+  const params: string[] = [];
+  if (clientId) { parts.push("client_id = ?"); params.push(clientId); }
+  if (journey) {
+    parts.push("journey = ?");
+    params.push(journey);
+  } else {
+    const keys = Object.keys(JOURNEY_STEPS);
+    if (keys.length) {
+      parts.push(`journey IN (${keys.map(() => "?").join(",")})`);
+      params.push(...keys);
+    }
+  }
+  const where = parts.length ? "WHERE " + parts.join(" AND ") : "";
+
+  // Get user-journey sessions grouped by date (scoped to client + journey)
   const rows = await db
     .prepare(`
       SELECT
@@ -24,53 +41,35 @@ export async function GET(req: NextRequest) {
         MAX(step) as lastStep,
         COUNT(*) as stepCount
       FROM events
-      ${cf}
+      ${where}
       GROUP BY DATE(timestamp), userId, journey
       ORDER BY date DESC
     `)
-    .all<{ date: string; userId: string; journey: string; lastStep: string; stepCount: number }>(...cp);
+    .all<{ date: string; userId: string; journey: string; lastStep: string; stepCount: number }>(...params);
 
-  // Calculate daily stats grouped by date and journey
-  const dailyMap = new Map<string, Map<string, { reach: Set<string>; completed: number; total: number }>>();
+  // Aggregate to one row per date (across whatever journeys passed the filter)
+  const dailyMap = new Map<string, { reach: Set<string>; completed: number; total: number }>();
 
   rows.forEach((row) => {
-    const key = row.date;
-    if (!dailyMap.has(key)) {
-      dailyMap.set(key, new Map());
+    if (!dailyMap.has(row.date)) {
+      dailyMap.set(row.date, { reach: new Set(), completed: 0, total: 0 });
     }
-
-    const journeyMap = dailyMap.get(key)!;
-    if (!journeyMap.has(row.journey)) {
-      journeyMap.set(row.journey, { reach: new Set(), completed: 0, total: 0 });
-    }
-
-    const day = journeyMap.get(row.journey)!;
+    const day = dailyMap.get(row.date)!;
     day.reach.add(row.userId);
     day.total++;
 
-    // Check if completed
     const steps = JOURNEY_STEPS[row.journey] || [];
-    const lastExpectedStep = steps[steps.length - 1];
-    if (row.lastStep === lastExpectedStep) {
-      day.completed++;
-    }
+    if (row.lastStep === steps[steps.length - 1]) day.completed++;
   });
 
-  // Convert to array with journey info
   const dailyStats = Array.from(dailyMap.entries())
-    .flatMap(([date, journeyMap]) =>
-      Array.from(journeyMap.entries()).map(([journey, data]) => ({
-        date,
-        journey,
-        reach: data.reach.size,
-        completionRate: data.total > 0 ? ((data.completed / data.total) * 100).toFixed(2) : "0.00",
-        dropoffRate: data.total > 0 ? (((data.total - data.completed) / data.total) * 100).toFixed(2) : "0.00",
-      }))
-    )
-    .sort((a, b) => {
-      const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
-      return dateCompare !== 0 ? dateCompare : a.journey.localeCompare(b.journey);
-    });
+    .map(([date, data]) => ({
+      date,
+      reach: data.reach.size,
+      completionRate: data.total > 0 ? ((data.completed / data.total) * 100).toFixed(2) : "0.00",
+      dropoffRate: data.total > 0 ? (((data.total - data.completed) / data.total) * 100).toFixed(2) : "0.00",
+    }))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return NextResponse.json({ dailyStats });
 }

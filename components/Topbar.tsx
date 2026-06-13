@@ -221,7 +221,7 @@ export default function Topbar({ title, subtitle }: { title: string; subtitle?: 
                           ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
                           : "bg-green-500/20 text-green-300 border border-green-500/30"
                       }`}>
-                        {user?.role === "super_admin" ? "⭐ Super Admin" : "Admin"}
+                        {user?.role === "super_admin" ? "Super Admin" : "Admin"}
                       </span>
                     </div>
                   </div>

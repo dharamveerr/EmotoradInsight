@@ -58,7 +58,7 @@ export default function ClientSwitcher() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all cursor-pointer"
         title="Switch client"
       >
         <span className="text-base">🏢</span>
@@ -71,7 +71,7 @@ export default function ClientSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 w-64 bg-slate-900 border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-fade-in z-50">
+        <div className="ls-dropdown absolute right-0 top-11 w-64 bg-slate-900 border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-fade-in z-50">
           <div className="px-3 py-2 text-[10px] uppercase font-semibold text-gray-500 border-b border-white/5">
             Clients
           </div>
@@ -84,9 +84,9 @@ export default function ClientSwitcher() {
                   key={c.id}
                   onClick={() => switchTo(c.id)}
                   disabled={busy}
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-50 ${
+                  className={`ls-item w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-50 ${
                     active?.id === c.id
-                      ? "bg-green-500/15 text-green-200"
+                      ? "ls-active bg-green-500/15 text-green-300"
                       : "text-gray-300 hover:bg-white/5 hover:text-white"
                   }`}
                 >

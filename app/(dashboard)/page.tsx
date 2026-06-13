@@ -6,6 +6,7 @@ import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
+import TypewriterLoader from "@/components/TypewriterLoader";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -77,6 +78,7 @@ export default function OverviewPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Topbar title="Overview" subtitle="Real-time chatbot performance at a glance" />
+      <TypewriterLoader isLoading={isLoading} messages={["Fetching chatbot metrics...", "Counting active sessions...", "Building today's overview...", "Almost ready..."]} />
       <main className="flex-1 overflow-auto p-7 space-y-6">
         {/* Date Picker */}
         <div className="flex items-center gap-3 flex-wrap">

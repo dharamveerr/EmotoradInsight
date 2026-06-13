@@ -1,9 +1,11 @@
 import Sidebar from "@/components/Sidebar";
 import ActivityTracker from "@/components/ActivityTracker";
+import PageLoader from "@/components/PageLoader";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell flex h-screen overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative">
+      <PageLoader />
       {/* Ambient glow orbs */}
       <div className="fixed top-0 right-0 w-[500px] h-[500px] bg-green-500/5 rounded-full blur-3xl pointer-events-none" />
       <div className="fixed bottom-0 left-1/3 w-[400px] h-[400px] bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />

@@ -7,6 +7,7 @@ import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
 import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
+import TypewriterLoader from "@/components/TypewriterLoader";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, PieChart, Pie, Cell as PieCell,
@@ -41,9 +42,20 @@ export default function ProductInsightsPage() {
   const priceDistribution = data?.priceDistribution || [];
   const funnel = data?.funnel || [];
 
+  // Days in selected range (inclusive). Falls back to days with actual data.
+  const days = fromDate && toDate
+    ? Math.max(1, Math.round((new Date(toDate).getTime() - new Date(fromDate).getTime()) / 86400000) + 1)
+    : Math.max(1, byDate.length);
+  const avgProductViewedPerDay = Math.round((funnel[1]?.count || 0) / days);
+
+  const entries = funnel[0]?.count || 0;
+  const lastStepCount = funnel.length > 0 ? (funnel[funnel.length - 1]?.count || 0) : 0;
+  const dropoffRate = entries > 0 ? Math.round(((entries - lastStepCount) / entries) * 100) : 0;
+
   return (
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="Journey Analytics" subtitle="Detailed analytics per journey" />
+      <TypewriterLoader isLoading={isLoading} messages={["Fetching journey analytics...", "Calculating conversion funnel...", "Preparing product insights...", "Hang tight..."]} />
       <main className="flex-1 p-7 space-y-6">
         {/* Journey Selector */}
         <div className="flex items-center gap-4 mb-4 flex-wrap">
@@ -61,15 +73,16 @@ export default function ProductInsightsPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
           {[
             { label: "Total Entries", value: funnel[0]?.count || 0, icon: "👥" },
-            { label: "Product Viewed", value: funnel[1]?.count || 0, icon: "📱" },
-            { label: "Price Filtered", value: funnel[2]?.count || 0, icon: "💰" },
-            { label: "Conversion Rate", value: funnel[2] && funnel[0] ? `${Math.round((funnel[2].count / funnel[0].count) * 100)}%` : "0%", icon: "✅" },
+            { label: "Average Entries", value: avgProductViewedPerDay, icon: "📊", sub: "avg / day" },
+            { label: "Drop-off Rate", value: `${dropoffRate}%`, icon: "📉" },
+            { label: "Conversion Rate", value: (funnel[0]?.count ?? 0) > 0 ? `${Math.round(((funnel[2]?.count ?? 0) / funnel[0].count) * 100)}%` : "0%", icon: "✅" },
           ].map((kpi, i) => (
             <div key={i} className="glass rounded-2xl p-5 animate-fade-in">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-gray-400 font-medium">{kpi.label}</p>
                   <p className="text-3xl font-bold text-white mt-2">{kpi.value}</p>
+                  {"sub" in kpi && <p className="text-xs text-gray-500 mt-1">{(kpi as { sub: string }).sub}</p>}
                 </div>
                 <span className="text-2xl">{kpi.icon}</span>
               </div>

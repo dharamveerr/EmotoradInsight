@@ -7,6 +7,7 @@ import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
 import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
+import TypewriterLoader from "@/components/TypewriterLoader";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine,
 } from "recharts";
@@ -41,6 +42,7 @@ export default function DropoffPage() {
   return (
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="Drop-off Analysis" subtitle="Where users abandon each journey" />
+      <TypewriterLoader isLoading={isLoading} messages={["Analysing drop-off points...", "Scanning journey exits...", "Crunching abandonment rates...", "Report almost ready..."]} />
       <main className="flex-1 p-7 space-y-6">
         <div className="flex items-center gap-6 flex-wrap animate-fade-in">
           <div className="flex items-center gap-3">

@@ -7,6 +7,7 @@ import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
 import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
+import TypewriterLoader from "@/components/TypewriterLoader";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -54,6 +55,7 @@ export default function HeatmapPage() {
   return (
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="Time-of-Day Heatmap" subtitle="When your users are most active" />
+      <TypewriterLoader isLoading={isLoading} messages={["Loading activity data...", "Mapping peak hours...", "Building heatmap grid...", "Almost done..."]} />
       <main className="flex-1 p-7 space-y-6">
         <div className="flex items-center gap-4 mb-4 flex-wrap">
           <label className="text-sm font-medium text-gray-400 whitespace-nowrap">Select Journey</label>

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import useSWR from "swr";
 import Topbar from "@/components/Topbar";
+import SelectGlass from "@/components/SelectGlass";
+import { useJourneyConfig } from "@/lib/useJourneyConfig";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -14,7 +16,12 @@ type DailyStat = {
 };
 
 export default function MISReportPage() {
-  const { data, isLoading } = useSWR("/api/daily-stats", fetcher);
+  const { labels: JOURNEY_LABELS } = useJourneyConfig();
+  const [journey, setJourney] = useState("");
+  const { data, isLoading } = useSWR(
+    `/api/daily-stats${journey ? `?journey=${encodeURIComponent(journey)}` : ""}`,
+    fetcher
+  );
   const dailyStats: DailyStat[] = data?.dailyStats || [];
 
   return (
@@ -22,6 +29,19 @@ export default function MISReportPage() {
       <Topbar title="MIS Report" subtitle="Daily overview of key metrics" />
 
       <main className="flex-1 p-7 space-y-6 overflow-auto">
+        {/* Journey filter */}
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-400">Select Journey</span>
+          <SelectGlass
+            value={journey}
+            onChange={setJourney}
+            options={[
+              { value: "", label: "All Journeys" },
+              ...Object.entries(JOURNEY_LABELS).map(([key, label]) => ({ value: key, label })),
+            ]}
+          />
+        </div>
+
         {/* Daily Overview Report Table */}
         <div>
           <h2 className="text-lg font-bold text-white mb-4">Daily Overview Report</h2>

@@ -16,7 +16,15 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const user = await db
     .prepare("SELECT id, role, client_id FROM app_users WHERE username = ? OR email = ?")
     .get<SessionUser>(identifier, identifier);
-  return user || null;
+  if (user) return user;
+
+  // Env-var super-admin bypass (and any valid signed token) may have no matching
+  // app_users row. Trust the role from the signed session so multi-tenant
+  // features still resolve instead of silently failing.
+  if (session.role) {
+    return { id: `session:${identifier}`, role: session.role as string, client_id: null };
+  }
+  return null;
 }
 
 /**

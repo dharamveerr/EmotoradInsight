@@ -7,6 +7,7 @@ import Topbar from "@/components/Topbar";
 import DateRangePicker from "@/components/DatePicker";
 import SelectGlass from "@/components/SelectGlass";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
+import TypewriterLoader from "@/components/TypewriterLoader";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
@@ -37,6 +38,7 @@ export default function JourneysPage() {
   return (
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="Journey Funnels" subtitle="Step-by-step conversion per journey" />
+      <TypewriterLoader isLoading={isLoading} messages={["Loading funnel data...", "Mapping user journey steps...", "Calculating conversion rates...", "Almost there..."]} />
       <main className="flex-1 p-7 space-y-6">
         <div className="flex items-center gap-4 mb-4 flex-wrap">
           <label className="text-sm font-medium text-gray-400 whitespace-nowrap">Select Journey</label>

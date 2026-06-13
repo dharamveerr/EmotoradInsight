@@ -77,8 +77,9 @@ export async function getJourneyConfig(): Promise<JourneyConfig> {
       // malformed structure — journey appears with no steps
     }
     const flat = flattenSteps(parsed.steps || []);
-    // Funnels need the journey entry itself as the first step
-    steps[key] = flat.length && flat[0] === j.name ? flat : [j.name, ...flat];
+    // Funnel = the journey's own steps exactly. Only fall back to the journey
+    // name when the journey has no steps defined (avoids an extra phantom step).
+    steps[key] = flat.length ? flat : [j.name];
   }
 
   // Published tree with zero journeys would blank the dashboard — fall back

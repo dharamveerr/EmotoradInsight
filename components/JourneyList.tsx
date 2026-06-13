@@ -96,8 +96,8 @@ export default function JourneyList({
                     <span
                       className={`text-xs px-2 py-0.5 rounded font-semibold ${
                         journey.status === "published"
-                          ? "bg-green-500/40 text-green-200 border border-green-500/50"
-                          : "bg-blue-500/40 text-blue-200 border border-blue-500/50"
+                          ? "ls-live bg-green-500/40 text-green-200 border border-green-500/50"
+                          : "ls-draft bg-blue-500/40 text-blue-200 border border-blue-500/50"
                       }`}
                     >
                       {journey.status === "published" ? "✓ Live" : "● Saved"}

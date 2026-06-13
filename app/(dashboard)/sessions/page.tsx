@@ -7,6 +7,7 @@ import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
+import TypewriterLoader from "@/components/TypewriterLoader";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -200,6 +201,7 @@ export default function SessionsPage() {
   return (
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="Count Replay" subtitle="Individual user journey paths" />
+      <TypewriterLoader isLoading={isLoading} messages={["Loading session data...", "Fetching user journeys...", "Organising session replay...", "Almost ready..."]} />
       <main className="flex-1 p-7 space-y-5">
 
         {/* Controls — sticky below topbar */}

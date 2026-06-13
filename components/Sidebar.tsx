@@ -96,7 +96,7 @@ export default function Sidebar() {
   const allNavItems = [...navItems, ...(isSuperAdmin ? superAdminItems : [])];
 
   return (
-    <aside className={`app-sidebar shrink-0 bg-gradient-to-b from-slate-950 to-slate-900 border-r border-white/5 flex flex-col sticky top-0 h-screen relative transition-all duration-300 ${collapsed ? "w-20" : "w-64"}`}>
+    <aside className={`app-sidebar shrink-0 bg-gradient-to-b from-slate-950 to-slate-900 border-r border-white/5 flex flex-col sticky top-0 h-screen relative z-20 transition-all duration-300 ${collapsed ? "w-20" : "w-64"}`}>
       {/* Glow accent */}
       <div className="absolute top-0 left-0 w-full h-32 bg-green-500/5 blur-3xl pointer-events-none" />
 
@@ -104,7 +104,7 @@ export default function Sidebar() {
       <button
         onClick={() => setCollapsed((c) => !c)}
         title={collapsed ? "Expand" : "Collapse"}
-        className="collapse-btn absolute -right-3 top-7 z-20 w-6 h-6 rounded-full bg-slate-800 border border-white/10 text-gray-300 hover:text-white hover:bg-slate-700 flex items-center justify-center shadow-lg transition"
+        className="collapse-btn absolute -right-3.5 top-8 z-20 w-7 h-7 rounded-full bg-slate-800 border border-white/10 text-gray-300 hover:text-white hover:bg-slate-700 flex items-center justify-center shadow-xl transition cursor-pointer"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`w-3.5 h-3.5 transition-transform ${collapsed ? "rotate-180" : ""}`}>
           <path d="M15 18l-6-6 6-6" />
@@ -124,7 +124,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-5 space-y-1.5">
+      <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto">
         {allNavItems.map((item, i) => {
           const active = pathname === item.href;
           return (

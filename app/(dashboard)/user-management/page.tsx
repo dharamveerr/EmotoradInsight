@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import useSWR, { mutate } from "swr";
 import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
@@ -52,7 +53,7 @@ function RoleBadge({ role }: { role: string }) {
           : "bg-green-500/20 text-green-300 border border-green-500/30"
       }`}
     >
-      {role === "super_admin" ? "⭐ Super Admin" : "Admin"}
+      {role === "super_admin" ? "Super Admin" : "Admin"}
     </span>
   );
 }
@@ -236,8 +237,8 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
   );
 }
 
-// Per-row kebab menu — keeps the table clean (read-only badges) and tucks
-// every mutating action behind one button.
+// Per-row action icons. Role + Client open a small picker popover; Grant/Deny
+// and Delete fire directly. Replaces the old single kebab menu.
 function RowActionsMenu({
   user, clients, isSuperAdmin, busy, onChangeRole, onChangeClient, onToggle, onDelete,
 }: {
@@ -250,61 +251,151 @@ function RowActionsMenu({
   onToggle: (u: AppUser) => void;
   onDelete: (u: AppUser) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState<"role" | "client" | "more" | null>(null);
+  const [portalPos, setPortalPos] = useState<{ top: number; right: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (menu && ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setPortalPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+    } else {
+      setPortalPos(null);
+    }
+  }, [menu]);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (
+        ref.current && !ref.current.contains(t) &&
+        portalRef.current && !portalRef.current.contains(t)
+      ) setMenu(null);
     }
-    if (open) document.addEventListener("mousedown", handler);
+    if (menu) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  }, [menu]);
 
-  // Client admins can't mutate other users — show a disabled placeholder
-  if (!isSuperAdmin) {
-    return <span className="text-xs text-gray-600">—</span>;
-  }
+  // Client admins can't mutate other users
+  if (!isSuperAdmin) return <span className="text-xs text-gray-600">—</span>;
 
-  const act = (fn: () => void) => { fn(); setOpen(false); };
+  const pick = (fn: () => void) => { fn(); setMenu(null); };
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative flex items-center justify-end gap-2" ref={ref}>
+      {/* Role — blue pill */}
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setMenu((m) => (m === "role" ? null : "role"))}
         disabled={busy}
-        className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${open ? "bg-white/10 text-white" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
-        title="Actions"
+        title="Change role"
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-40 shadow-sm ${
+          menu === "role"
+            ? "bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-indigo-500/50 shadow-lg ring-1 ring-indigo-400/30"
+            : "bg-blue-500/12 text-blue-500 hover:bg-gradient-to-r hover:from-indigo-500 hover:to-blue-600 hover:text-white hover:shadow-lg hover:shadow-indigo-500/50 hover:ring-1 hover:ring-indigo-400/30"
+        }`}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5 shrink-0">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          <path d="M9 12l2 2 4-4" />
+        </svg>
+        <span>Role</span>
+      </button>
+
+      {/* Client — purple pill (not for super admins) */}
+      {user.role !== "super_admin" && (
+        <button
+          onClick={() => setMenu((m) => (m === "client" ? null : "client"))}
+          disabled={busy}
+          title="Assign client"
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-40 shadow-sm ${
+            menu === "client"
+              ? "bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-violet-500/50 shadow-lg ring-1 ring-violet-400/30"
+              : "bg-purple-500/12 text-purple-500 hover:bg-gradient-to-r hover:from-violet-500 hover:to-purple-600 hover:text-white hover:shadow-lg hover:shadow-violet-500/50 hover:ring-1 hover:ring-violet-400/30"
+          }`}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5 shrink-0">
+            <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
+            <path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
+          </svg>
+          <span>Client</span>
+        </button>
+      )}
+      {/* placeholder to keep 3-dot aligned when client btn hidden */}
+      {user.role === "super_admin" && <div className="w-[72px]" />}
+
+      {/* More — access toggle + delete tucked in a 3-dot menu */}
+      <button
+        onClick={() => setMenu((m) => (m === "more" ? null : "more"))}
+        disabled={busy}
+        title="More"
+        className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${menu === "more" ? "bg-white/10 text-white" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
       >
         <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
           <circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" />
         </svg>
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-9 w-56 bg-slate-900 border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 animate-fade-in">
-          {/* Role */}
-          <div className="px-3 pt-2.5 pb-1 text-[10px] uppercase font-semibold text-gray-500">Role</div>
-          {(["admin", "super_admin"] as const).map((r) => (
-            <button
-              key={r}
-              onClick={() => act(() => onChangeRole(user, r))}
-              className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
-                user.role === r ? "text-green-300 bg-green-500/10" : "text-gray-300 hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              {r === "super_admin" ? "Super Admin" : "Admin"}
-              {user.role === r && <span className="text-xs">✓</span>}
-            </button>
-          ))}
-
-          {/* Client (not for super admins) */}
-          {user.role !== "super_admin" && (
+      {/* Popovers — rendered via portal so they escape overflow:hidden table containers */}
+      {menu && portalPos && typeof document !== "undefined" && createPortal(
+        <div
+          ref={portalRef}
+          style={{ position: "fixed", top: portalPos.top, right: portalPos.right, zIndex: 9999 }}
+          className="w-52 bg-slate-900 border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-fade-in"
+        >
+          {menu === "more" && (
+            <div className="p-1">
+              <button
+                onClick={() => pick(() => onToggle(user))}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+                  user.is_active ? "text-amber-300 hover:bg-amber-500/10" : "text-green-300 hover:bg-green-500/10"
+                }`}
+              >
+                {user.is_active ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                    <circle cx="12" cy="12" r="10" /><path d="M4.9 4.9l14.2 14.2" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="M22 4L12 14.01l-3-3" />
+                  </svg>
+                )}
+                {user.is_active ? "Set Inactive" : "Set Active"}
+              </button>
+              <button
+                onClick={() => pick(() => onDelete(user))}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                  <path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2" />
+                </svg>
+                Delete user
+              </button>
+            </div>
+          )}
+          {menu === "role" && (
             <>
-              <div className="px-3 pt-2.5 pb-1 text-[10px] uppercase font-semibold text-gray-500 border-t border-white/5 mt-1">Client</div>
-              <div className="max-h-40 overflow-y-auto">
+              <div className="px-3 pt-2.5 pb-1 text-[10px] uppercase font-semibold text-gray-500">Role</div>
+              {(["admin", "super_admin"] as const).map((r) => (
                 <button
-                  onClick={() => act(() => onChangeClient(user, ""))}
+                  key={r}
+                  onClick={() => pick(() => onChangeRole(user, r))}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                    user.role === r ? "text-green-300 bg-green-500/10" : "text-gray-300 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  {r === "super_admin" ? "Super Admin" : "Admin"}
+                  {user.role === r && <span className="text-xs">✓</span>}
+                </button>
+              ))}
+            </>
+          )}
+          {menu === "client" && (
+            <>
+              <div className="px-3 pt-2.5 pb-1 text-[10px] uppercase font-semibold text-gray-500">Client</div>
+              <div className="max-h-48 overflow-y-auto">
+                <button
+                  onClick={() => pick(() => onChangeClient(user, ""))}
                   className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
                     !user.client_id ? "text-green-300 bg-green-500/10" : "text-gray-300 hover:bg-white/5 hover:text-white"
                   }`}
@@ -314,7 +405,7 @@ function RowActionsMenu({
                 {clients.map((c) => (
                   <button
                     key={c.id}
-                    onClick={() => act(() => onChangeClient(user, c.id))}
+                    onClick={() => pick(() => onChangeClient(user, c.id))}
                     className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
                       user.client_id === c.id ? "text-green-300 bg-green-500/10" : "text-gray-300 hover:bg-white/5 hover:text-white"
                     }`}
@@ -325,23 +416,8 @@ function RowActionsMenu({
               </div>
             </>
           )}
-
-          {/* Status + delete */}
-          <div className="border-t border-white/5 mt-1 p-1">
-            <button
-              onClick={() => act(() => onToggle(user))}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors"
-            >
-              {user.is_active ? "🚫 Deny access" : "✅ Grant access"}
-            </button>
-            <button
-              onClick={() => act(() => onDelete(user))}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors"
-            >
-              🗑 Delete user
-            </button>
-          </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -356,6 +432,8 @@ export default function UserManagementPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [warning, setWarning] = useState("");
+  const [search, setSearch] = useState("");
+  const [clientFilter, setClientFilter] = useState(""); // "" all | clientId | "none"
 
   // Auto-dismiss the warning banner after 5 seconds
   useEffect(() => {
@@ -392,7 +470,17 @@ export default function UserManagementPage() {
     }
   }
 
-  const sortedUsers = [...users].sort((a, b) => {
+  const q = search.trim().toLowerCase();
+  const filteredUsers = users.filter((u) => {
+    // Client filter
+    if (clientFilter === "none") { if (u.client_id || u.role === "super_admin") return false; }
+    else if (clientFilter && u.client_id !== clientFilter) return false;
+    // Search across name / username / email
+    if (q && ![u.name, u.username, u.email].some((f) => (f || "").toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
     const va = sortVal(a, sortKey), vb = sortVal(b, sortKey);
     const cmp = va < vb ? -1 : va > vb ? 1 : 0;
     return sortDir === "asc" ? cmp : -cmp;
@@ -519,11 +607,40 @@ export default function UserManagementPage() {
           )}
         </div>
 
+        {/* Filter bar */}
+        {tab === "users" && (
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[220px] max-w-sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2">
+                <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.3-4.3" />
+              </svg>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name, username, or email…"
+                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-green-500/50"
+              />
+            </div>
+            {isSuperAdmin && (
+              <SelectGlass
+                value={clientFilter}
+                onChange={setClientFilter}
+                options={[
+                  { value: "", label: "All clients" },
+                  ...clients.map((c) => ({ value: c.id, label: c.name })),
+                  { value: "none", label: "Unassigned" },
+                ]}
+              />
+            )}
+            <span className="text-xs text-gray-500 ml-auto">{sortedUsers.length} of {users.length}</span>
+          </div>
+        )}
+
         {/* Users Tab */}
         {tab === "users" && (
           <div className="glass rounded-2xl overflow-hidden animate-fade-in">
-            {users.length === 0 ? (
-              <div className="p-12 text-center text-gray-500">No users found</div>
+            {sortedUsers.length === 0 ? (
+              <div className="p-12 text-center text-gray-500">{users.length === 0 ? "No users found" : "No users match your filters"}</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -534,7 +651,7 @@ export default function UserManagementPage() {
                       <SortHeader label="Client" k="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortHeader label="Status" k="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortHeader label="Last Login" k="last_login" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                      <th className="text-right px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Actions</th>
+                      <th className="text-center px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -562,7 +679,7 @@ export default function UserManagementPage() {
                             <span className="text-xs text-gray-500 italic">All clients</span>
                           ) : u.client_name ? (
                             <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">
-                              🏢 {u.client_name}
+                              {u.client_name}
                             </span>
                           ) : (
                             <span className="text-xs text-gray-500">Unassigned</span>

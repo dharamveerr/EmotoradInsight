@@ -31,6 +31,12 @@ export async function GET(req: NextRequest) {
   const cf = clientId ? " AND client_id = ?" : "";
   const cp: string[] = clientId ? [clientId] : [];
 
+  // Aggregate queries that don't target one journey are restricted to the
+  // published tree's journeys, so non-published data never appears in reports.
+  const journeyKeys = Object.keys(JOURNEY_STEPS);
+  const js = journeyKeys.length ? ` AND journey IN (${journeyKeys.map(() => "?").join(",")})` : "";
+  const jp: string[] = journeyKeys.length ? journeyKeys : [];
+
   // ── OVERVIEW ──────────────────────────────────────────────────────────
   if (type === "overview") {
     const today    = new Date().toISOString().slice(0, 10);
@@ -38,12 +44,12 @@ export async function GET(req: NextRequest) {
     const dateTo   = to   || today;
 
     const todaySessions = (await db
-      .prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf}`)
-      .get<{ c: number }>(dateFrom, dateTo, ...cp))!;
+      .prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf}${js}`)
+      .get<{ c: number }>(dateFrom, dateTo, ...cp, ...jp))!;
 
     const activeJourneys = (await db
-      .prepare(`SELECT COUNT(DISTINCT journey) as c FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf}`)
-      .get<{ c: number }>(dateFrom, dateTo, ...cp))!;
+      .prepare(`SELECT COUNT(DISTINCT journey) as c FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf}${js}`)
+      .get<{ c: number }>(dateFrom, dateTo, ...cp, ...jp))!;
 
     const journeyCompletions = await Promise.all(
       Object.entries(JOURNEY_STEPS).map(async ([j, steps]) => {
@@ -58,12 +64,12 @@ export async function GET(req: NextRequest) {
     const completionRate = totalUsers > 0 ? Math.round((totalCompleted / totalUsers) * 100) : 0;
 
     const last7Days = await db
-      .prepare(`SELECT date(timestamp) as date, COUNT(DISTINCT userId || journey) as count FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf} GROUP BY date(timestamp) ORDER BY date`)
-      .all<{ date: string; count: number }>(dateFrom, dateTo, ...cp);
+      .prepare(`SELECT date(timestamp) as date, COUNT(DISTINCT userId || journey) as count FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf}${js} GROUP BY date(timestamp) ORDER BY date`)
+      .all<{ date: string; count: number }>(dateFrom, dateTo, ...cp, ...jp);
 
     const journeyDist = await db
-      .prepare(`SELECT journey, COUNT(DISTINCT userId) as count FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf} GROUP BY journey ORDER BY count DESC`)
-      .all<{ journey: string; count: number }>(dateFrom, dateTo, ...cp);
+      .prepare(`SELECT journey, COUNT(DISTINCT userId) as count FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf}${js} GROUP BY journey ORDER BY count DESC`)
+      .all<{ journey: string; count: number }>(dateFrom, dateTo, ...cp, ...jp);
 
     const journeyBreakdown = await Promise.all(
       Object.entries(JOURNEY_STEPS).map(async ([j, steps]) => {
@@ -84,8 +90,8 @@ export async function GET(req: NextRequest) {
   if (type === "funnel") {
     if (!journey) {
       const rows = await db
-        .prepare(`SELECT step, COUNT(DISTINCT userId) as count FROM events WHERE 1=1 ${dc}${cf} GROUP BY step ORDER BY count DESC LIMIT 20`)
-        .all<{ step: string; count: number }>(...dp, ...cp);
+        .prepare(`SELECT step, COUNT(DISTINCT userId) as count FROM events WHERE 1=1 ${dc}${cf}${js} GROUP BY step ORDER BY count DESC LIMIT 20`)
+        .all<{ step: string; count: number }>(...dp, ...cp, ...jp);
       return NextResponse.json({ funnel: rows });
     }
     const steps = JOURNEY_STEPS[journey] || [];
@@ -105,6 +111,7 @@ export async function GET(req: NextRequest) {
     const whereParts: string[] = [];
     const params: (string | number)[] = [];
     if (journey) { whereParts.push("journey = ?"); params.push(journey); }
+    else if (journeyKeys.length) { whereParts.push(`journey IN (${journeyKeys.map(() => "?").join(",")})`); params.push(...journeyKeys); }
     if (from && to) { whereParts.push("date(timestamp) BETWEEN ? AND ?"); params.push(from, to); }
     if (clientId) { whereParts.push("client_id = ?"); params.push(clientId); }
     const where = whereParts.length ? "WHERE " + whereParts.join(" AND ") : "";
@@ -119,8 +126,8 @@ export async function GET(req: NextRequest) {
   if (type === "dropoff") {
     if (!journey) {
       const rows = await db
-        .prepare(`SELECT step, COUNT(DISTINCT userId) as entered FROM events WHERE 1=1 ${dc}${cf} GROUP BY step ORDER BY entered DESC LIMIT 20`)
-        .all<{ step: string; entered: number }>(...dp, ...cp);
+        .prepare(`SELECT step, COUNT(DISTINCT userId) as entered FROM events WHERE 1=1 ${dc}${cf}${js} GROUP BY step ORDER BY entered DESC LIMIT 20`)
+        .all<{ step: string; entered: number }>(...dp, ...cp, ...jp);
       const dropoff = rows.map((row, i) => {
         const nextEntered = rows[i + 1]?.entered ?? 0;
         const exited  = Math.max(0, Number(row.entered) - Number(nextEntered));

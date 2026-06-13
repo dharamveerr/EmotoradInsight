@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@keyframes loader-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 :root {
   --background: #060b14;
   --foreground: #e8edf4;
@@ -42,6 +47,19 @@ body {
 @keyframes glow-pulse {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 0.6; }
+}
+@keyframes loader-dot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+@keyframes pill-glow {
+  0%, 100% { box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(34,197,94,0.15), 0 0 16px rgba(34,197,94,0.2); }
+  50%       { box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(59,130,246,0.4), 0 0 28px rgba(59,130,246,0.3), 0 0 8px rgba(139,92,246,0.2); }
+}
+@keyframes pill-bg-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 .animate-fade-in { animation: fade-in 0.5s ease-out both; }
@@ -199,6 +217,8 @@ html.light [class~="text-purple-300"] { color: #6d28d9 !important; }
 html.light [class~="text-purple-400"] { color: #7c3aed !important; }
 html.light [class~="text-orange-400"] { color: #c2410c !important; }
 html.light [class~="text-yellow-400"] { color: #a16207 !important; }
+html.light [class~="text-amber-300"]  { color: #92400e !important; }
+html.light [class~="text-amber-400"]  { color: #78350f !important; }
 html.light [class~="text-emerald-400"]{ color: #047857 !important; }
 html.light [class~="text-cyan-400"]   { color: #0e7490 !important; }
 html.light [class~="text-teal-400"]   { color: #0f766e !important; }
@@ -299,8 +319,8 @@ html.light .page-sticky-bar {
 }
 
 /* --- Sidebar collapse button (always-dark slate) → light in light mode --- */
-html.light .collapse-btn { background-color: #e2e8f0 !important; color: #475569 !important; }
-html.light .collapse-btn:hover { background-color: #cbd5e1 !important; color: #0f172a !important; }
+html.light .collapse-btn { background-color: #f0fdf4 !important; color: #15803d !important; border-color: rgba(22,163,74,0.4) !important; box-shadow: 0 2px 8px rgba(0,0,0,0.18) !important; }
+html.light .collapse-btn:hover { background-color: #dcfce7 !important; color: #14532d !important; border-color: rgba(22,163,74,0.6) !important; }
 
 /* --- SelectGlass dropdown menu (inline dark) → light surface + readable items --- */
 html.light .select-glass-menu {
@@ -346,3 +366,12 @@ html.light [class~="hover:bg-red-500/10"] { background-color: rgba(239,68,68,0.0
 html.light [class~="hover:bg-red-500/10"]:hover { background-color: rgba(239,68,68,0.12) !important; }
 html.light [class~="hover:text-white"] { color: #0f172a !important; }
 html.light [class~="hover:text-red-300"] { color: #dc2626 !important; }
+
+/* ClientSwitcher dropdown: explicit text colors for light mode */
+html.light .ls-dropdown .ls-item         { color: #334155 !important; }
+html.light .ls-dropdown .ls-item.ls-active { color: #15803d !important; }
+html.light .ls-dropdown .ls-item:hover   { color: #0f172a !important; }
+
+/* Live / Draft badges — light mode */
+html.light .ls-live  { color: #14532d !important; background-color: rgba(34,197,94,0.2) !important; border-color: rgba(34,197,94,0.5) !important; }
+html.light .ls-draft { color: #1e3a5f !important; background-color: rgba(100,116,139,0.2) !important; border-color: rgba(100,116,139,0.4) !important; }
