@@ -7,6 +7,17 @@ import VariableUploadModal from "./VariableUploadModal";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+type DiscoveredVar = {
+  name: string;
+  value?: string | null;
+  bot_template_id?: string | null;
+  is_new?: boolean;
+  synced?: boolean;
+};
+
+// Short, readable label for a bot_template_id UUID (first segment).
+const shortTpl = (id: string) => `Template ${id.split("-")[0]}`;
+
 interface VariableManagerProps {
   onDragStart?: (variable: string) => void;
 }
@@ -14,8 +25,9 @@ interface VariableManagerProps {
 export default function VariableManager({ onDragStart }: VariableManagerProps) {
   const { data, isLoading, mutate } = useSWR("/api/variables", fetcher);
   const variables: Variable[] = data?.variables || [];
-  const discovered: { name: string; is_new?: boolean; synced?: boolean }[] = data?.discovered || [];
+  const discovered: DiscoveredVar[] = data?.discovered || [];
   const [search, setSearch] = useState("");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [newVarName, setNewVarName] = useState("");
   const [newVarDesc, setNewVarDesc] = useState("");
@@ -27,8 +39,17 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
 
   const matchesSearch = (name: string) => name.toLowerCase().includes(search.toLowerCase());
   const filtered = variables.filter((v: Variable) => matchesSearch(v.name));
-  const newVars = discovered.filter((v) => v.is_new && matchesSearch(v.name));
-  const dataVars = discovered.filter((v) => !v.is_new && matchesSearch(v.name));
+  // Synced source vars carry a bot_template_id → grouped into per-template
+  // sections. Event-derived vars (no template) fall under "From data".
+  const syncedVars = discovered.filter((v) => v.bot_template_id && matchesSearch(v.name));
+  const dataVars = discovered.filter((v) => !v.bot_template_id && matchesSearch(v.name));
+  const templateGroups = Object.entries(
+    syncedVars.reduce<Record<string, DiscoveredVar[]>>((acc, v) => {
+      const k = v.bot_template_id as string;
+      (acc[k] ||= []).push(v);
+      return acc;
+    }, {})
+  );
 
   const handleSync = async () => {
     setSyncing(true);
@@ -163,7 +184,7 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {isLoading ? (
           <div className="text-xs text-gray-500 text-center py-8">Loading…</div>
-        ) : filtered.length === 0 && newVars.length === 0 && dataVars.length === 0 ? (
+        ) : filtered.length === 0 && syncedVars.length === 0 && dataVars.length === 0 ? (
           <div className="text-xs text-gray-500 text-center py-8">No variables</div>
         ) : (
           <>
@@ -204,35 +225,69 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
             </div>
           ))}
 
-          {newVars.length > 0 && (
-            <p className="text-xs text-amber-400/80 uppercase font-semibold px-1 pt-2 flex items-center gap-1">
-              ✨ New <span className="text-gray-600 normal-case font-normal">from last sync</span>
-            </p>
-          )}
-          {newVars.map((variable) => (
-            <div
-              key={variable.name}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer?.setData("variable", variable.name);
-                if (onDragStart) onDragStart(variable.name);
-              }}
-              className="p-2 bg-amber-500/15 border border-amber-500/30 rounded cursor-move hover:bg-amber-500/25 transition-colors group"
-            >
-              <div className="flex justify-between items-start gap-2">
-                <p className="text-xs font-mono text-amber-300 truncate flex-1 min-w-0">{variable.name}</p>
+          {/* Synced source variables — grouped per bot_template_id */}
+          {templateGroups.map(([tplId, vars]) => {
+            const isCollapsed = collapsed[tplId];
+            return (
+              <div key={tplId} className="pt-2">
                 <button
-                  onClick={() => handleDeleteSynced(variable.name)}
-                  disabled={deleting === variable.name}
-                  className="text-xs px-1 py-0.5 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50 shrink-0"
-                  title="Delete"
+                  onClick={() => setCollapsed((c) => ({ ...c, [tplId]: !c[tplId] }))}
+                  className="w-full flex items-center justify-between px-1 py-1 text-xs uppercase font-semibold text-gray-400 hover:text-gray-200 transition-colors"
+                  title={tplId}
                 >
-                  ✕
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`w-3 h-3 shrink-0 transition-transform ${isCollapsed ? "-rotate-90" : ""}`}>
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                    <span className="truncate">{shortTpl(tplId)}</span>
+                  </span>
+                  <span className="text-gray-600 normal-case font-normal shrink-0">{vars.length}</span>
                 </button>
+                {!isCollapsed && (
+                  <div className="space-y-2 mt-1.5">
+                    {vars.map((variable) => (
+                      <div
+                        key={`${tplId}:${variable.name}`}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer?.setData("variable", variable.name);
+                          if (onDragStart) onDragStart(variable.name);
+                        }}
+                        className={`p-2 rounded cursor-move transition-colors group border ${
+                          variable.is_new
+                            ? "bg-amber-500/15 border-amber-500/30 hover:bg-amber-500/25"
+                            : "bg-blue-500/15 border-blue-500/25 hover:bg-blue-500/25"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-mono truncate ${variable.is_new ? "text-amber-300" : "text-blue-300"}`}>
+                              {variable.name}
+                              {variable.is_new && <span className="ml-1 text-[9px] text-amber-400/80">✨ new</span>}
+                            </p>
+                            {variable.value != null && variable.value !== "" && (
+                              <p className="text-xs text-gray-500 truncate mt-0.5" title={variable.value}>
+                                = {variable.value}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleDeleteSynced(variable.name)}
+                            disabled={deleting === variable.name}
+                            className="text-xs px-1 py-0.5 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50 shrink-0"
+                            title="Delete"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-600 text-center mt-1">⋮ drag</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-gray-600 text-center mt-1">⋮ drag</p>
-            </div>
-          ))}
+            );
+          })}
 
           {dataVars.length > 0 && (
             <p className="text-xs text-gray-600 uppercase font-semibold px-1 pt-2">

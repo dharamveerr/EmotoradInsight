@@ -34,7 +34,18 @@ export async function POST(req: NextRequest) {
 
   const orgId = String(body.org_id || "").trim();
   const sourceClientId = String(body.client_id || "").trim();
-  const names = Array.isArray(body.variables) ? body.variables.map((v) => String(v)) : [];
+  // Accept either legacy string[] names or template-tagged objects:
+  //   { bot_template_id, name, value } | { variable_name, variable_string_value }
+  const raw = Array.isArray(body.variables) ? body.variables : [];
+  const items = raw.map((v) => {
+    if (typeof v === "string") return v;
+    const o = v as Record<string, unknown>;
+    return {
+      name: String(o.name ?? o.variable_name ?? ""),
+      value: o.value != null ? String(o.value) : o.variable_string_value != null ? String(o.variable_string_value) : null,
+      bot_template_id: o.bot_template_id != null ? String(o.bot_template_id) : null,
+    };
+  });
   if (!orgId || !sourceClientId) {
     return NextResponse.json({ error: "org_id and client_id are required" }, { status: 400 });
   }
@@ -50,7 +61,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { added, total } = await mergeClientVariables(client.id, names);
+  const { added, total } = await mergeClientVariables(client.id, items);
   await db
     .prepare("UPDATE clients SET last_synced_at = ? WHERE id = ?")
     .run(new Date().toISOString(), client.id);

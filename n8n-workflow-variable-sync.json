@@ -1,0 +1,75 @@
+{
+  "name": "Variable Sync (per bot_template_id, latest value)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "variable-sync",
+        "httpMethod": "POST"
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "notes": "Copy this node's Production URL into the app env var N8N_VARIABLE_SYNC_URL. App POSTs { org_id, client_id } with header x-n8n-secret."
+    },
+    {
+      "parameters": {
+        "host": "your-source-db-host",
+        "port": 5432,
+        "database": "source_db_name",
+        "user": "source_user",
+        "password": "source_password",
+        "ssl": true,
+        "query": "SELECT DISTINCT ON (bot_template_id, variable_name)\n       bot_template_id,\n       variable_name,\n       variable_string_value AS variable_value\nFROM   chat_log_variable\nWHERE  org_id     = $1\n  AND  client_id  = $2\n  AND  is_deleted = false\n  AND  variable_name IS NOT NULL\n  AND  created_at >= NOW() - INTERVAL '15 days'\nORDER  BY bot_template_id, variable_name, created_at DESC;",
+        "queryParams": [
+          "{{ $json.body.org_id }}",
+          "{{ $json.body.client_id }}"
+        ]
+      },
+      "id": "postgresQuery",
+      "name": "Query Source DB",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "notes": "Newest value per (bot_template_id, variable_name). Needs covering index idx_clv_tpl for index-only scan."
+    },
+    {
+      "parameters": {
+        "functionCode": "// Shape the callback body. Pass org_id/client_id through from the webhook,\n// and roll every queried row into a {bot_template_id, name, value} list.\nconst trigger = $node[\"Webhook\"].json.body || {};\nconst rows = $input.all();\nconst variables = rows.map((r) => ({\n  bot_template_id: r.json.bot_template_id,\n  name: r.json.variable_name,\n  value: r.json.variable_value\n}));\nreturn [{ json: { org_id: trigger.org_id, client_id: trigger.client_id, variables } }];"
+      },
+      "id": "shapeBody",
+      "name": "Shape Callback Body",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_APP_URL/api/sync/variables",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-secret", "value": "YOUR_N8N_WEBHOOK_SECRET" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "callback",
+      "name": "POST results to app",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 300],
+      "notes": "x-n8n-secret MUST equal the app's N8N_WEBHOOK_SECRET. Replace YOUR_APP_URL with the deployed app origin."
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Query Source DB", "type": "main", "index": 0 }]] },
+    "Query Source DB": { "main": [[{ "node": "Shape Callback Body", "type": "main", "index": 0 }]] },
+    "Shape Callback Body": { "main": [[{ "node": "POST results to app", "type": "main", "index": 0 }]] }
+  }
+}

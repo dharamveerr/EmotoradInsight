@@ -281,6 +281,30 @@ async function initDb(): Promise<DB> {
     "UPDATE app_users SET permissions = '[\"journey_analytics\"]' WHERE permissions IS NULL"
   );
 
+  // Migrate client_variables to be template-scoped + carry a value (one-time).
+  // Variables are distinct per bot_template_id, so the uniqueness key changes
+  // from (client_id, name) to (client_id, bot_template_id, name).
+  const cvCols = await client.execute("PRAGMA table_info(client_variables)");
+  const hasTpl = (cvCols.rows as unknown as { name: string }[]).some((c) => c.name === "bot_template_id");
+  if (!hasTpl) {
+    await client.execute("ALTER TABLE client_variables RENAME TO client_variables_old");
+    await client.execute(`CREATE TABLE client_variables (
+      id TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL,
+      bot_template_id TEXT,
+      name TEXT NOT NULL,
+      value TEXT,
+      created_at TEXT NOT NULL,
+      is_new INTEGER DEFAULT 0,
+      UNIQUE(client_id, bot_template_id, name)
+    )`);
+    await client.execute(
+      "INSERT INTO client_variables (id, client_id, bot_template_id, name, value, created_at, is_new) SELECT id, client_id, NULL, name, NULL, created_at, is_new FROM client_variables_old"
+    );
+    await client.execute("DROP TABLE client_variables_old");
+    await client.execute("CREATE INDEX IF NOT EXISTS idx_client_variables ON client_variables(client_id)");
+  }
+
   // Migrate variables table to be client-scoped (one-time, safe)
   const varCols = await client.execute("PRAGMA table_info(variables)");
   const hasVarClientId = (varCols.rows as unknown as { name: string }[]).some((c) => c.name === "client_id");

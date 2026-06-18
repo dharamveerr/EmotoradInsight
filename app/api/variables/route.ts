@@ -28,20 +28,27 @@ export async function GET(req: NextRequest) {
   //  2. event metadata keys — vars seen in already-ingested events (is_new=false).
   // Both surface in the tree's Variables panel alongside manually-added ones.
   const customNames = new Set(variables.map((v) => v.name));
-  const seen = new Set<string>(customNames);
 
-  const synced = clientId
-    ? (await getClientVariables(clientId)).map((v) => ({ ...v, synced: true }))
-    : [];
-  const fromEvents = (await getAllVariablesFromDB(clientId)).map((name) => ({ name, is_new: false, synced: false }));
-
-  const discovered = [...synced, ...fromEvents]
+  // Synced source variables — keyed per (bot_template_id, name) so the same
+  // name under different templates is kept separate (panel groups by template).
+  const syncedRaw = clientId ? await getClientVariables(clientId) : [];
+  const seenSynced = new Set<string>();
+  const synced = syncedRaw
     .filter((v) => {
-      if (!v.name.startsWith("@") || seen.has(v.name)) return false;
-      seen.add(v.name);
+      const key = `${v.bot_template_id ?? ""} ${v.name}`;
+      if (!v.name.startsWith("@") || seenSynced.has(key)) return false;
+      seenSynced.add(key);
       return true;
     })
-    .map((v) => ({ name: v.name, is_new: v.is_new, synced: v.synced }));
+    .map((v) => ({ name: v.name, value: v.value, bot_template_id: v.bot_template_id, is_new: v.is_new, synced: true }));
+
+  // Event-derived names (no template/value). Skip any already custom or synced.
+  const syncedNames = new Set(syncedRaw.map((v) => v.name));
+  const fromEvents = (await getAllVariablesFromDB(clientId))
+    .filter((name) => name.startsWith("@") && !customNames.has(name) && !syncedNames.has(name))
+    .map((name) => ({ name, value: null, bot_template_id: null, is_new: false, synced: false }));
+
+  const discovered = [...synced, ...fromEvents];
 
   return NextResponse.json({ variables, discovered });
 }
