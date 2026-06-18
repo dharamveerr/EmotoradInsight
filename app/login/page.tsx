@@ -785,9 +785,12 @@ function LoginInner() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-white hover:bg-gray-100 text-slate-900 font-bold py-3.5 rounded-full transition-all shadow-lg disabled:opacity-50"
+              className="w-full bg-white hover:bg-gray-100 text-slate-900 font-bold py-3.5 rounded-full transition-all shadow-lg disabled:opacity-70 flex items-center justify-center gap-2"
             >
-              {loading ? "Signing in..." : "Continue"}
+              {loading && (
+                <span className="w-4 h-4 border-2 border-slate-400/40 border-t-slate-900 rounded-full animate-spin" />
+              )}
+              {loading ? "Logging in…" : "Continue"}
             </button>
 
             <button

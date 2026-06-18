@@ -115,7 +115,7 @@ function SessionSortHeader({
 }
 
 function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; onCreated: () => void; clients: Client[] }) {
-  const [form, setForm] = useState({ username: "", email: "", name: "", password: "", role: "admin", client_id: "", journeyAnalytics: false });
+  const [form, setForm] = useState({ username: "", email: "", name: "", password: "", role: "admin", client_id: "", journeyAnalytics: false, agentStatistics: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -123,8 +123,12 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
     e.preventDefault();
     setLoading(true);
     setError("");
-    const { journeyAnalytics, ...rest } = form;
-    const payload = { ...rest, permissions: journeyAnalytics ? ["journey_analytics"] : [] };
+    const { journeyAnalytics, agentStatistics, ...rest } = form;
+    const permissions = [
+      ...(journeyAnalytics ? ["journey_analytics"] : []),
+      ...(agentStatistics ? ["agent_statistics"] : []),
+    ];
+    const payload = { ...rest, permissions };
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -248,26 +252,48 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
           {form.role !== "super_admin" && (
             <div>
               <label className="block text-xs text-gray-400 mb-1.5 font-medium">Report Access</label>
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, journeyAnalytics: !f.journeyAnalytics }))}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all ${
-                  form.journeyAnalytics
-                    ? "bg-green-500/10 border-green-500/40 text-green-300"
-                    : "bg-white/5 border-white/10 text-gray-300 hover:border-white/20"
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                    <path d="M3 3v18h18" /><path d="M19 9l-5 5-4-4-3 3" />
-                  </svg>
-                  Journey Analytics
-                </span>
-                <span className={`w-9 h-5 rounded-full relative transition-colors ${form.journeyAnalytics ? "bg-green-500" : "bg-white/15"}`}>
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.journeyAnalytics ? "left-[18px]" : "left-0.5"}`} />
-                </span>
-              </button>
-              <p className="text-[10px] text-gray-500 mt-1">Without this, the user can log in but sees no reports.</p>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, journeyAnalytics: !f.journeyAnalytics }))}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all ${
+                    form.journeyAnalytics
+                      ? "bg-green-500/10 border-green-500/40 text-green-300"
+                      : "bg-white/5 border-white/10 text-gray-300 hover:border-white/20"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                      <path d="M3 3v18h18" /><path d="M19 9l-5 5-4-4-3 3" />
+                    </svg>
+                    Journey Analytics
+                  </span>
+                  <span className={`w-9 h-5 rounded-full relative transition-colors ${form.journeyAnalytics ? "bg-green-500" : "bg-white/15"}`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.journeyAnalytics ? "left-[18px]" : "left-0.5"}`} />
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, agentStatistics: !f.agentStatistics }))}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all ${
+                    form.agentStatistics
+                      ? "bg-green-500/10 border-green-500/40 text-green-300"
+                      : "bg-white/5 border-white/10 text-gray-300 hover:border-white/20"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    Agent Statistics
+                  </span>
+                  <span className={`w-9 h-5 rounded-full relative transition-colors ${form.agentStatistics ? "bg-green-500" : "bg-white/15"}`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.agentStatistics ? "left-[18px]" : "left-0.5"}`} />
+                  </span>
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">Without any access, the user can log in but sees no reports.</p>
             </div>
           )}
 
@@ -297,7 +323,7 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
 // Per-row action icons. Role + Client open a small picker popover; Grant/Deny
 // and Delete fire directly. Replaces the old single kebab menu.
 function RowActionsMenu({
-  user, clients, isSuperAdmin, busy, onChangeRole, onChangeClient, onToggle, onTogglePerms, onDelete,
+  user, clients, isSuperAdmin, busy, onChangeRole, onChangeClient, onToggle, onTogglePerm, onDelete,
 }: {
   user: AppUser;
   clients: Client[];
@@ -306,7 +332,7 @@ function RowActionsMenu({
   onChangeRole: (u: AppUser, role: string) => void;
   onChangeClient: (u: AppUser, clientId: string) => void;
   onToggle: (u: AppUser) => void;
-  onTogglePerms: (u: AppUser) => void;
+  onTogglePerm: (u: AppUser, key: string) => void;
   onDelete: (u: AppUser) => void;
 }) {
   const [menu, setMenu] = useState<"role" | "client" | "more" | null>(null);
@@ -404,19 +430,35 @@ function RowActionsMenu({
           {menu === "more" && (
             <div className="p-1">
               {user.role !== "super_admin" && (() => {
-                const has = parseUserPerms(user.permissions).includes("journey_analytics");
+                const perms = parseUserPerms(user.permissions);
+                const ja = perms.includes("journey_analytics");
+                const as = perms.includes("agent_statistics");
                 return (
-                  <button
-                    onClick={() => pick(() => onTogglePerms(user))}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
-                      has ? "text-amber-300 hover:bg-amber-500/10" : "text-green-300 hover:bg-green-500/10"
-                    }`}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                      <path d="M3 3v18h18" /><path d="M19 9l-5 5-4-4-3 3" />
-                    </svg>
-                    {has ? "Revoke reports" : "Grant reports"}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => pick(() => onTogglePerm(user, "journey_analytics"))}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+                        ja ? "text-amber-300 hover:bg-amber-500/10" : "text-green-300 hover:bg-green-500/10"
+                      }`}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                        <path d="M3 3v18h18" /><path d="M19 9l-5 5-4-4-3 3" />
+                      </svg>
+                      {ja ? "Revoke Journey Analytics" : "Grant Journey Analytics"}
+                    </button>
+                    <button
+                      onClick={() => pick(() => onTogglePerm(user, "agent_statistics"))}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+                        as ? "text-amber-300 hover:bg-amber-500/10" : "text-green-300 hover:bg-green-500/10"
+                      }`}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                      {as ? "Revoke Agent Statistics" : "Grant Agent Statistics"}
+                    </button>
+                  </>
                 );
               })()}
               <button
@@ -634,13 +676,13 @@ export default function UserManagementPage() {
     setUpdatingId(null);
   }
 
-  async function toggleJourneyAnalytics(user: AppUser) {
+  async function togglePerm(user: AppUser, key: string) {
     setUpdatingId(user.id);
     setWarning("");
     const current = parseUserPerms(user.permissions);
-    const next = current.includes("journey_analytics")
-      ? current.filter((p) => p !== "journey_analytics")
-      : [...current, "journey_analytics"];
+    const next = current.includes(key)
+      ? current.filter((p) => p !== key)
+      : [...current, key];
     const res = await fetch(`/api/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -864,15 +906,27 @@ export default function UserManagementPage() {
                         <td className="px-5 py-4">
                           {u.role === "super_admin" ? (
                             <span className="text-xs text-gray-500 italic">Full access</span>
-                          ) : parseUserPerms(u.permissions).includes("journey_analytics") ? (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-green-500/10 text-green-300 border border-green-500/20">
-                              ✓ Journey Analytics
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-white/5 text-gray-400 border border-white/10">
-                              No access
-                            </span>
-                          )}
+                          ) : (() => {
+                            const perms = parseUserPerms(u.permissions);
+                            const chips = [
+                              perms.includes("journey_analytics") && { label: "Journey Analytics" },
+                              perms.includes("agent_statistics") && { label: "Agent Statistics" },
+                            ].filter(Boolean) as { label: string }[];
+                            if (chips.length === 0) return (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-white/5 text-gray-400 border border-white/10">
+                                No access
+                              </span>
+                            );
+                            return (
+                              <div className="flex flex-wrap gap-1.5">
+                                {chips.map((c) => (
+                                  <span key={c.label} className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-green-500/10 text-green-300 border border-green-500/20">
+                                    ✓ {c.label}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Status badge (read-only) */}
@@ -903,7 +957,7 @@ export default function UserManagementPage() {
                               onChangeRole={changeRole}
                               onChangeClient={changeClient}
                               onToggle={toggleAccess}
-                              onTogglePerms={toggleJourneyAnalytics}
+                              onTogglePerm={togglePerm}
                               onDelete={deleteUser}
                             />
                           </div>

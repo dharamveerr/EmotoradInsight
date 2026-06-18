@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import getDb from "@/lib/db";
 
-// Report permission keys. Currently one bundle gating all journey analytics
-// pages (Overview, Journey Insights, Funnels, Heatmap, Drop-off, MIS Report,
-// Create Tree). Add more keys here as new report groups are introduced.
+// Report permission keys.
+//  - journey_analytics: Overview, Journey Insights, Funnels, Heatmap,
+//    Drop-off, MIS Report, Create Tree.
+//  - agent_statistics: agent performance reports.
+// Add more keys here as new report groups are introduced.
 export const PERMISSIONS = {
   JOURNEY_ANALYTICS: "journey_analytics",
+  AGENT_STATISTICS: "agent_statistics",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
+
+// Every grantable report permission. A user with any one of these may enter
+// the dashboard.
+export const REPORT_PERMISSIONS: PermissionKey[] = [
+  PERMISSIONS.JOURNEY_ANALYTICS,
+  PERMISSIONS.AGENT_STATISTICS,
+];
 
 // Parse the JSON array stored in app_users.permissions. Tolerates null,
 // malformed JSON, and legacy CSV — always returns a string[].
@@ -29,8 +39,10 @@ export function hasPermission(role: string, permissions: string[], key: Permissi
   return permissions.includes(key);
 }
 
+// Gate for entering the dashboard: super admin, or holds any report permission.
 export function canViewReports(role: string, permissions: string[]): boolean {
-  return hasPermission(role, permissions, PERMISSIONS.JOURNEY_ANALYTICS);
+  if (role === "super_admin") return true;
+  return REPORT_PERMISSIONS.some((k) => permissions.includes(k));
 }
 
 // Server-side lookup of a user's role + permissions by login identifier
