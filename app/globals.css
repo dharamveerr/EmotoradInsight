@@ -413,3 +413,7 @@ html.light .cl-toast { background: #1e293b !important; color: #ffffff !important
 /* Sync message banner — light mode */
 html.light [class~="text-red-400"]  { color: #dc2626; }
 html.light [class~="text-green-400"] { color: #16a34a; }
+
+/* Session date inputs — dark calendar picker by default, light in light mode */
+.session-date { color-scheme: dark; }
+html.light .session-date { color-scheme: light; }

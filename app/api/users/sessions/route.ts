@@ -12,36 +12,43 @@ export async function GET(req: NextRequest) {
 
   const params = identifier ? [identifier, identifier] : [];
 
-  // UNION login/logout events + page visit events, unified timeline
+  // UNION login/logout events + page visit events, unified timeline.
+  // LEFT JOIN app_users → clients so super admin sees which tenant each user belongs to.
   const sessions = await db
     .prepare(
       `SELECT
-         id,
-         user_id,
-         identifier,
-         role,
-         action,
+         ls.id,
+         ls.user_id,
+         ls.identifier,
+         ls.role,
+         ls.action,
          NULL AS page,
          NULL AS page_label,
-         timestamp,
-         ip_address
-       FROM login_sessions
-       ${identifier ? "WHERE identifier = ?" : ""}
+         ls.timestamp,
+         ls.ip_address,
+         c.name AS client_name
+       FROM login_sessions ls
+       LEFT JOIN app_users u ON u.id = ls.user_id
+       LEFT JOIN clients c ON c.id = u.client_id
+       ${identifier ? "WHERE ls.identifier = ?" : ""}
 
        UNION ALL
 
        SELECT
-         id,
-         user_id,
-         identifier,
-         role,
+         al.id,
+         al.user_id,
+         al.identifier,
+         al.role,
          'visit' AS action,
-         page,
-         page_label,
-         timestamp,
-         ip_address
-       FROM activity_log
-       ${identifier ? "WHERE identifier = ?" : ""}
+         al.page,
+         al.page_label,
+         al.timestamp,
+         al.ip_address,
+         c.name AS client_name
+       FROM activity_log al
+       LEFT JOIN app_users u ON u.id = al.user_id
+       LEFT JOIN clients c ON c.id = u.client_id
+       ${identifier ? "WHERE al.identifier = ?" : ""}
 
        ORDER BY timestamp DESC
        LIMIT 300`

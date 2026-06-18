@@ -58,7 +58,6 @@ function AddClientModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
           <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-lg">🏢</div>
           <div>
             <h3 className="text-base font-bold text-white">Add Client</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Create a tenant + link its source data</p>
           </div>
         </div>
         <form onSubmit={submit} className="p-5 space-y-4">
@@ -81,7 +80,6 @@ function AddClientModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
               <input value={form.client_id} onChange={set("client_id")} placeholder="source client id" className={`${inputCls} font-mono`} />
             </div>
           </div>
-          <p className="text-[10px] text-gray-500">org_id + client_id link this tenant to its rows in <code className="text-gray-400">chat_log_variable</code>.</p>
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="cl-cancel flex-1 py-2.5 rounded-xl border border-white/15 text-sm font-medium text-gray-200 hover:border-white/40 transition-all" style={{ background: "rgba(255,255,255,0.05)" }}>Cancel</button>
             <button type="submit" disabled={busy || !allFilled} className="cl-create-btn flex-1 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-semibold text-white border border-slate-500/50 shadow-sm tracking-wide transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] cursor-pointer">

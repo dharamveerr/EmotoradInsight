@@ -84,6 +84,8 @@ function LoginInner() {
   const [mounted, setMounted] = useState(false);
   const [hoverBike, setHoverBike] = useState(false);
   const [parallax, setParallax] = useState(0);
+  // Auth method: null = picker, "username" = username/password form, "phone" = phone OTP
+  const [authMethod, setAuthMethod] = useState<null | "username" | "phone">(null);
   // Login vs Sign Up tab
   const [mode, setMode] = useState<"login" | "signup">("login");
   // Signup flow: email → (consent for new Google users) → code → credentials
@@ -656,9 +658,14 @@ function LoginInner() {
                 ← Back to login
               </button>
             </>
-          ) : (
+          ) : authMethod === null ? (
           <>
-          <h2 className="text-2xl font-bold text-white text-center mb-2">Welcome back</h2>
+          <h2 className="text-2xl font-bold text-white text-center mb-1">
+            Login
+          </h2>
+          <p className="text-gray-300 text-center mb-7 text-xs font-semibold tracking-wider uppercase">
+            Unlock premium insights
+          </p>
           <p className="text-gray-400 text-center mb-7 text-sm">
             Access premium chatbot analytics & journey insights.
           </p>
@@ -669,14 +676,19 @@ function LoginInner() {
             </div>
           )}
 
-          {notice && (
-            <div className="mb-5 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-300 text-sm text-center">
-              {notice}
-            </div>
-          )}
-
-          {/* Provider buttons */}
+          {/* Auth method picker */}
           <div className="space-y-3 mb-5">
+            <button
+              onClick={() => setAuthMethod("username")}
+              className="w-full bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold py-3.5 rounded-full transition-all flex items-center justify-center gap-3"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              Continue with username
+            </button>
+
             <a
               href="/api/auth/google/signin"
               onClick={() => setGoogleLoading(true)}
@@ -696,7 +708,7 @@ function LoginInner() {
             </a>
 
             <button
-              onClick={() => setError("Phone OTP: use field below or contact admin")}
+              onClick={() => setAuthMethod("phone")}
               className="w-full bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold py-3.5 rounded-full transition-all flex items-center justify-center gap-3"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
@@ -706,14 +718,40 @@ function LoginInner() {
             </button>
           </div>
 
-          {/* OR divider */}
-          <div className="flex items-center gap-4 mb-5">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-gray-500 text-sm font-medium">OR</span>
-            <div className="flex-1 h-px bg-white/10" />
-          </div>
+          <p className="text-center text-sm text-gray-500 mt-6">
+            New user?{" "}
+            <button
+              onClick={() => switchMode("signup")}
+              className="text-blue-400 hover:text-blue-300 font-semibold transition"
+            >
+              Sign up
+            </button>
+          </p>
 
-          {/* Username + Password */}
+          <p className="text-gray-600 text-xs text-center mt-4">
+            Secured by OAuth 2.0 · Premium Analytics Dashboard
+          </p>
+          </>
+          ) : authMethod === "username" ? (
+          <>
+          <h2 className="text-2xl font-bold text-white text-center mb-2">Welcome back</h2>
+          <p className="text-gray-400 text-center mb-7 text-sm">
+            Sign in with your username and password.
+          </p>
+
+          {error && (
+            <div className="mb-5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm text-center">
+              {error}
+            </div>
+          )}
+
+          {notice && (
+            <div className="mb-5 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-300 text-sm text-center">
+              {notice}
+            </div>
+          )}
+
+          {/* Username + Password form */}
           <form onSubmit={handleLogin} className="space-y-3">
             <input
               type="text"
@@ -723,6 +761,7 @@ function LoginInner() {
               placeholder="Username"
               required
               autoComplete="off"
+              autoFocus
             />
             <div className="relative">
               <input
@@ -760,15 +799,52 @@ function LoginInner() {
             </button>
           </form>
 
-          <p className="text-center text-sm text-gray-500 mt-6">
-            New user?{" "}
-            <button
-              onClick={() => switchMode("signup")}
-              className="text-blue-400 hover:text-blue-300 font-semibold transition"
-            >
-              Sign up
-            </button>
+          <button
+            onClick={() => setAuthMethod(null)}
+            className="w-full text-gray-400 hover:text-white text-sm mt-5 transition"
+          >
+            ← Back to login options
+          </button>
+
+          <p className="text-gray-600 text-xs text-center mt-4">
+            Secured by OAuth 2.0 · Premium Analytics Dashboard
           </p>
+          </>
+          ) : (
+          <>
+          <h2 className="text-2xl font-bold text-white text-center mb-2">Phone verification</h2>
+          <p className="text-gray-400 text-center mb-7 text-sm">
+            Enter your phone number to receive a verification code.
+          </p>
+
+          {error && (
+            <div className="mb-5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm text-center">
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-3">
+            <input
+              type="tel"
+              placeholder="Enter your phone number"
+              className="w-full bg-transparent border border-white/20 rounded-full px-5 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
+              required
+              autoFocus
+            />
+            <button
+              type="submit"
+              className="w-full bg-white hover:bg-gray-100 text-slate-900 font-bold py-3.5 rounded-full transition-all shadow-lg"
+            >
+              Send verification code
+            </button>
+          </form>
+
+          <button
+            onClick={() => setAuthMethod(null)}
+            className="w-full text-gray-400 hover:text-white text-sm mt-5 transition"
+          >
+            ← Back to login options
+          </button>
 
           <p className="text-gray-600 text-xs text-center mt-4">
             Secured by OAuth 2.0 · Premium Analytics Dashboard

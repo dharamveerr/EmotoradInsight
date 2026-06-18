@@ -38,6 +38,7 @@ interface LoginSession {
   page_label: string | null;
   timestamp: string;
   ip_address: string | null;
+  client_name: string | null;
 }
 
 function UserAvatar({ name, picture }: { name: string; picture: string | null }) {
@@ -66,6 +67,33 @@ function SortHeader({
   sortKey: string;
   sortDir: "asc" | "desc";
   onSort: (k: "name" | "role" | "client" | "status" | "last_login") => void;
+}) {
+  const active = sortKey === k;
+  return (
+    <th className="text-left px-5 py-4">
+      <button
+        onClick={() => onSort(k)}
+        className={`inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider transition-colors ${
+          active ? "text-white" : "text-gray-500 hover:text-gray-300"
+        }`}
+      >
+        {label}
+        <span className={`text-[9px] leading-none ${active ? "text-green-400" : "text-gray-600"}`}>
+          {active ? (sortDir === "asc" ? "▲" : "▼") : "⇅"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+function SessionSortHeader({
+  label, k, sortKey, sortDir, onSort,
+}: {
+  label: string;
+  k: "user" | "client" | "page" | "timestamp";
+  sortKey: string;
+  sortDir: "asc" | "desc";
+  onSort: (k: "user" | "client" | "page" | "timestamp") => void;
 }) {
   const active = sortKey === k;
   return (
@@ -424,6 +452,13 @@ function RowActionsMenu({
 }
 
 type SortKey = "name" | "role" | "client" | "status" | "last_login";
+type SessionSortKey = "user" | "client" | "page" | "timestamp";
+
+// Local date as YYYY-MM-DD for date inputs (avoids UTC off-by-one)
+function localDateStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+const todayStr = localDateStr();
 
 export default function UserManagementPage() {
   const [tab, setTab] = useState<"users" | "sessions">("users");
@@ -434,6 +469,12 @@ export default function UserManagementPage() {
   const [warning, setWarning] = useState("");
   const [search, setSearch] = useState("");
   const [clientFilter, setClientFilter] = useState(""); // "" all | clientId | "none"
+  // Session History tab: independent search + sort + date range
+  const [sessionSearch, setSessionSearch] = useState("");
+  const [sessionSortKey, setSessionSortKey] = useState<SessionSortKey>("timestamp");
+  const [sessionSortDir, setSessionSortDir] = useState<"asc" | "desc">("desc");
+  const [dateFrom, setDateFrom] = useState(todayStr); // YYYY-MM-DD — default current day
+  const [dateTo, setDateTo] = useState(todayStr);     // YYYY-MM-DD
 
   // Auto-dismiss the warning banner after 5 seconds
   useEffect(() => {
@@ -484,6 +525,40 @@ export default function UserManagementPage() {
     const va = sortVal(a, sortKey), vb = sortVal(b, sortKey);
     const cmp = va < vb ? -1 : va > vb ? 1 : 0;
     return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  function toggleSessionSort(k: SessionSortKey) {
+    if (sessionSortKey === k) setSessionSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSessionSortKey(k); setSessionSortDir(k === "timestamp" ? "desc" : "asc"); }
+  }
+
+  function sessionSortVal(s: LoginSession, k: SessionSortKey): string | number {
+    switch (k) {
+      case "user": return (s.identifier || "").toLowerCase();
+      case "client": return (s.client_name || "~").toLowerCase();
+      case "page": return (s.page_label || s.page || "~").toLowerCase();
+      case "timestamp": return new Date(s.timestamp).getTime();
+    }
+  }
+
+  const sq = sessionSearch.trim().toLowerCase();
+  // Date range bounds (inclusive). dateTo covers the whole selected day.
+  const fromMs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+  const toMs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
+  const filteredSessions = sessions.filter((s) => {
+    if (sq && ![s.identifier, s.client_name, s.page_label, s.page].some(
+      (f) => (f || "").toLowerCase().includes(sq)
+    )) return false;
+    const t = new Date(s.timestamp).getTime();
+    if (fromMs !== null && t < fromMs) return false;
+    if (toMs !== null && t > toMs) return false;
+    return true;
+  });
+
+  const sortedSessions = [...filteredSessions].sort((a, b) => {
+    const va = sessionSortVal(a, sessionSortKey), vb = sessionSortVal(b, sessionSortKey);
+    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    return sessionSortDir === "asc" ? cmp : -cmp;
   });
 
   async function toggleAccess(user: AppUser) {
@@ -750,13 +825,62 @@ export default function UserManagementPage() {
 
         {/* Session History Tab */}
         {tab === "sessions" && (
-          <div className="glass rounded-2xl overflow-hidden animate-fade-in">
+          <div className="animate-fade-in space-y-4">
+            {/* Search + date range filters */}
+            {sessionsData && sessions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={sessionSearch}
+                    onChange={(e) => setSessionSearch(e.target.value)}
+                    placeholder="Search by user, client, or page…"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500 font-medium">From</label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    max={dateTo || undefined}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="session-date bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30 transition"
+                  />
+                  <label className="text-xs text-gray-500 font-medium">To</label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom || undefined}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="session-date bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30 transition"
+                  />
+                  {(dateFrom || dateTo) && (
+                    <button
+                      onClick={() => { setDateFrom(""); setDateTo(""); }}
+                      className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded-lg hover:bg-white/5 transition"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <span className="text-xs text-gray-500 ml-auto">
+                  {sortedSessions.length} {sortedSessions.length === 1 ? "entry" : "entries"}
+                </span>
+              </div>
+            )}
+
+            <div className="glass rounded-2xl overflow-hidden">
             {!sessionsData ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/5">
-                      {[...Array(6)].map((_, i) => (
+                      {[...Array(7)].map((_, i) => (
                         <th key={`header-${i}`} className="px-5 py-4"><div className="skeleton h-3 w-16 rounded"></div></th>
                       ))}
                     </tr>
@@ -764,7 +888,7 @@ export default function UserManagementPage() {
                   <tbody className="divide-y divide-white/5">
                     {[...Array(5)].map((_, i) => (
                       <tr key={`skeleton-${i}`}>
-                        {[...Array(6)].map((_, j) => (
+                        {[...Array(7)].map((_, j) => (
                           <td key={`cell-${j}`} className="px-5 py-4"><div className="skeleton h-4 w-20 rounded"></div></td>
                         ))}
                       </tr>
@@ -774,21 +898,24 @@ export default function UserManagementPage() {
               </div>
             ) : sessions.length === 0 ? (
               <div className="p-12 text-center text-gray-500">No activity yet</div>
+            ) : sortedSessions.length === 0 ? (
+              <div className="p-12 text-center text-gray-500">No entries match your filters</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/5">
-                      <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">User</th>
+                      <SessionSortHeader label="User" k="user" sortKey={sessionSortKey} sortDir={sessionSortDir} onSort={toggleSessionSort} />
                       <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Role</th>
+                      <SessionSortHeader label="Client" k="client" sortKey={sessionSortKey} sortDir={sessionSortDir} onSort={toggleSessionSort} />
                       <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Activity</th>
-                      <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Page / Detail</th>
-                      <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Timestamp</th>
+                      <SessionSortHeader label="Page / Detail" k="page" sortKey={sessionSortKey} sortDir={sessionSortDir} onSort={toggleSessionSort} />
+                      <SessionSortHeader label="Timestamp" k="timestamp" sortKey={sessionSortKey} sortDir={sessionSortDir} onSort={toggleSessionSort} />
                       <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">IP</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {sessions.map((s) => {
+                    {sortedSessions.map((s) => {
                       const actionMeta =
                         s.action === "login"
                           ? { label: "Login", color: "bg-green-500/10 text-green-400 border-green-500/20", icon: "→" }
@@ -802,6 +929,15 @@ export default function UserManagementPage() {
                           </td>
                           <td className="px-5 py-3.5">
                             {s.role && <RoleBadge role={s.role} />}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {s.role === "super_admin" ? (
+                              <span className="text-xs text-gray-500 italic">All clients</span>
+                            ) : s.client_name ? (
+                              <span className="text-xs text-white font-medium">{s.client_name}</span>
+                            ) : (
+                              <span className="text-xs text-gray-600">—</span>
+                            )}
                           </td>
                           <td className="px-5 py-3.5">
                             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${actionMeta.color}`}>
@@ -832,6 +968,7 @@ export default function UserManagementPage() {
                 </table>
               </div>
             )}
+            </div>
           </div>
         )}
       </main>
