@@ -10,12 +10,10 @@ import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import TypewriterLoader from "@/components/TypewriterLoader";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  LineChart, Line, Legend, PieChart, Pie, Cell as PieCell,
+  LineChart, Line, Legend,
 } from "recharts";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-const PIE_COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7"];
 
 const toLocalDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 
@@ -38,8 +36,6 @@ export default function ProductInsightsPage() {
 
   const byDate = data?.byDate || [];
   const byHour = data?.byHour || [];
-  const productDistribution = data?.productDistribution || [];
-  const priceDistribution = data?.priceDistribution || [];
   const funnel = data?.funnel || [];
 
   // Days in selected range (inclusive). Falls back to days with actual data.
@@ -123,62 +119,6 @@ export default function ProductInsightsPage() {
                   <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-        {/* Product & Price Distribution */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="glass rounded-2xl p-6 animate-fade-in delay-3">
-            <h2 className="font-bold text-white mb-5">Product Choices</h2>
-            {isLoading ? (
-              <div className="skeleton rounded-lg h-80" />
-            ) : productDistribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie data={productDistribution} cx="50%" cy="50%" outerRadius={90} paddingAngle={2} dataKey="count">
-                    {productDistribution.map((_: unknown, i: number) => (
-                      <PieCell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ background: "#0f1a2a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-80 flex items-center justify-center text-gray-500">No data</div>
-            )}
-          </div>
-
-          <div className="glass rounded-2xl p-6 animate-fade-in delay-4">
-            <h2 className="font-bold text-white mb-5">Price Range Preferences</h2>
-            {isLoading ? (
-              <div className="skeleton rounded-lg h-80" />
-            ) : priceDistribution.length > 0 ? (
-              <div className="space-y-4">
-                {priceDistribution.map((item: any, i: number) => {
-                  const maxVal = Math.max(...priceDistribution.map((p: any) => p.count));
-                  const pct = maxVal > 0 ? (item.count / maxVal) * 100 : 0;
-                  return (
-                    <div key={i}>
-                      <div className="flex justify-between text-sm text-gray-300 mb-2">
-                        <span className="font-medium">{item.name}</span>
-                        <span className="text-xs text-gray-400">{item.count} users</span>
-                      </div>
-                      <div className="h-8 bg-white/5 rounded-lg overflow-hidden">
-                        <div
-                          className="h-full rounded-lg transition-all duration-500"
-                          style={{
-                            width: `${pct}%`,
-                            background: `linear-gradient(90deg, ${PIE_COLORS[i % PIE_COLORS.length]}, ${PIE_COLORS[(i + 1) % PIE_COLORS.length]})`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="h-80 flex items-center justify-center text-gray-500">No data</div>
             )}
           </div>
         </div>

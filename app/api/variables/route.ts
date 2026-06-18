@@ -11,10 +11,13 @@ import {
   deleteVariable,
   isVariableUsedInJourney,
 } from "@/lib/variables";
+import { denyIfNoReports } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const denied = await denyIfNoReports(req);
+  if (denied) return denied;
 
   const clientId = await getActiveClientId();
   const variables = await getCustomVariables(clientId);

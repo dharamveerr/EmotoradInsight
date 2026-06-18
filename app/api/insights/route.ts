@@ -4,6 +4,7 @@ import getDb from "@/lib/db";
 import { getJourneyConfig } from "@/lib/journey-config";
 import { getActiveClientId } from "@/lib/client-context";
 import { ensureHydrated } from "@/lib/source-fetch";
+import { denyIfNoReports } from "@/lib/permissions";
 
 // Helper: returns SQL clause + params for optional date range filtering
 function df(from: string, to: string) {
@@ -15,6 +16,8 @@ function df(from: string, to: string) {
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const denied = await denyIfNoReports(req);
+  if (denied) return denied;
 
   const { searchParams } = new URL(req.url);
   const type    = searchParams.get("type")    || "overview";

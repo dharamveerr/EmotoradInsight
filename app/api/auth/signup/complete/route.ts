@@ -54,9 +54,11 @@ export async function POST(req: NextRequest) {
     "unknown";
 
   const newId = uuidv4();
+  // Self-signup users start with NO report access ('[]'). A super admin must
+  // grant Journey Analytics before any dashboard appears.
   await db.prepare(
-    `INSERT INTO app_users (id, username, email, name, role, is_active, password_hash, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'admin', 1, ?, ?, ?)`
+    `INSERT INTO app_users (id, username, email, name, role, is_active, password_hash, permissions, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'admin', 1, ?, '[]', ?, ?)`
   ).run(newId, cleanUsername, cleanEmail, cleanName, hashPassword(String(password).trim()), now, now);
 
   await db.prepare("DELETE FROM otp_requests WHERE contact = ?").run(cleanEmail);

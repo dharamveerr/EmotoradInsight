@@ -272,6 +272,14 @@ async function initDb(): Promise<DB> {
   await addColumn("ALTER TABLE clients ADD COLUMN last_synced_at TEXT");
   // Flag synced variables added in the most recent sync (shown as "New")
   await addColumn("ALTER TABLE client_variables ADD COLUMN is_new INTEGER DEFAULT 0");
+  // Per-user report permissions (JSON array of permission keys, e.g. ["journey_analytics"])
+  await addColumn("ALTER TABLE app_users ADD COLUMN permissions TEXT");
+  // One-time backfill: rows predating this column (NULL) keep their current
+  // access by granting journey_analytics. New self-signups insert '[]' so they
+  // start with no report access until a super admin grants it.
+  await client.execute(
+    "UPDATE app_users SET permissions = '[\"journey_analytics\"]' WHERE permissions IS NULL"
+  );
 
   // Migrate variables table to be client-scoped (one-time, safe)
   const varCols = await client.execute("PRAGMA table_info(variables)");

@@ -40,7 +40,7 @@ export async function PATCH(
     }
   }
 
-  const allowed = ["role", "is_active", "name", "client_id"] as const;
+  const allowed = ["role", "is_active", "name", "client_id", "permissions"] as const;
   const updates: string[] = [];
   const values: unknown[] = [];
 
@@ -50,7 +50,10 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid role" }, { status: 400 });
       }
       updates.push(`${key} = ?`);
-      values.push(key === "client_id" ? (body[key] || null) : body[key]);
+      if (key === "client_id") values.push(body[key] || null);
+      // permissions stored as JSON array string
+      else if (key === "permissions") values.push(JSON.stringify(Array.isArray(body[key]) ? body[key] : []));
+      else values.push(body[key]);
     }
   }
 

@@ -21,6 +21,7 @@ interface AppUser {
   last_login: string | null;
   client_id: string | null;
   client_name: string | null;
+  permissions: string | null; // JSON array string, e.g. ["journey_analytics"]
 }
 
 interface Client {
@@ -114,7 +115,7 @@ function SessionSortHeader({
 }
 
 function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; onCreated: () => void; clients: Client[] }) {
-  const [form, setForm] = useState({ username: "", email: "", name: "", password: "", role: "admin", client_id: "" });
+  const [form, setForm] = useState({ username: "", email: "", name: "", password: "", role: "admin", client_id: "", journeyAnalytics: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -122,10 +123,12 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
     e.preventDefault();
     setLoading(true);
     setError("");
+    const { journeyAnalytics, ...rest } = form;
+    const payload = { ...rest, permissions: journeyAnalytics ? ["journey_analytics"] : [] };
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     setLoading(false);
@@ -242,6 +245,32 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
             </div>
           )}
 
+          {form.role !== "super_admin" && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Report Access</label>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, journeyAnalytics: !f.journeyAnalytics }))}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all ${
+                  form.journeyAnalytics
+                    ? "bg-green-500/10 border-green-500/40 text-green-300"
+                    : "bg-white/5 border-white/10 text-gray-300 hover:border-white/20"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                    <path d="M3 3v18h18" /><path d="M19 9l-5 5-4-4-3 3" />
+                  </svg>
+                  Journey Analytics
+                </span>
+                <span className={`w-9 h-5 rounded-full relative transition-colors ${form.journeyAnalytics ? "bg-green-500" : "bg-white/15"}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.journeyAnalytics ? "left-[18px]" : "left-0.5"}`} />
+                </span>
+              </button>
+              <p className="text-[10px] text-gray-500 mt-1">Without this, the user can log in but sees no reports.</p>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -268,7 +297,7 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
 // Per-row action icons. Role + Client open a small picker popover; Grant/Deny
 // and Delete fire directly. Replaces the old single kebab menu.
 function RowActionsMenu({
-  user, clients, isSuperAdmin, busy, onChangeRole, onChangeClient, onToggle, onDelete,
+  user, clients, isSuperAdmin, busy, onChangeRole, onChangeClient, onToggle, onTogglePerms, onDelete,
 }: {
   user: AppUser;
   clients: Client[];
@@ -277,6 +306,7 @@ function RowActionsMenu({
   onChangeRole: (u: AppUser, role: string) => void;
   onChangeClient: (u: AppUser, clientId: string) => void;
   onToggle: (u: AppUser) => void;
+  onTogglePerms: (u: AppUser) => void;
   onDelete: (u: AppUser) => void;
 }) {
   const [menu, setMenu] = useState<"role" | "client" | "more" | null>(null);
@@ -373,6 +403,22 @@ function RowActionsMenu({
         >
           {menu === "more" && (
             <div className="p-1">
+              {user.role !== "super_admin" && (() => {
+                const has = parseUserPerms(user.permissions).includes("journey_analytics");
+                return (
+                  <button
+                    onClick={() => pick(() => onTogglePerms(user))}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+                      has ? "text-amber-300 hover:bg-amber-500/10" : "text-green-300 hover:bg-green-500/10"
+                    }`}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                      <path d="M3 3v18h18" /><path d="M19 9l-5 5-4-4-3 3" />
+                    </svg>
+                    {has ? "Revoke reports" : "Grant reports"}
+                  </button>
+                );
+              })()}
               <button
                 onClick={() => pick(() => onToggle(user))}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
@@ -459,6 +505,17 @@ function localDateStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 const todayStr = localDateStr();
+
+// Parse app_users.permissions JSON array string into string[].
+function parseUserPerms(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function UserManagementPage() {
   const [tab, setTab] = useState<"users" | "sessions">("users");
@@ -572,6 +629,26 @@ export default function UserManagementPage() {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setWarning(data.error || "Failed to update user");
+    }
+    mutate("/api/users");
+    setUpdatingId(null);
+  }
+
+  async function toggleJourneyAnalytics(user: AppUser) {
+    setUpdatingId(user.id);
+    setWarning("");
+    const current = parseUserPerms(user.permissions);
+    const next = current.includes("journey_analytics")
+      ? current.filter((p) => p !== "journey_analytics")
+      : [...current, "journey_analytics"];
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ permissions: next }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setWarning(data.error || "Failed to update access");
     }
     mutate("/api/users");
     setUpdatingId(null);
@@ -719,7 +796,7 @@ export default function UserManagementPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/5">
-                      {[...Array(6)].map((_, i) => (
+                      {[...Array(7)].map((_, i) => (
                         <th key={`header-${i}`} className="px-5 py-4"><div className="skeleton h-3 w-16 rounded"></div></th>
                       ))}
                     </tr>
@@ -727,7 +804,7 @@ export default function UserManagementPage() {
                   <tbody className="divide-y divide-white/5">
                     {[...Array(5)].map((_, i) => (
                       <tr key={`skeleton-${i}`}>
-                        {[...Array(6)].map((_, j) => (
+                        {[...Array(7)].map((_, j) => (
                           <td key={`cell-${j}`} className="px-5 py-4"><div className="skeleton h-4 w-20 rounded"></div></td>
                         ))}
                       </tr>
@@ -745,6 +822,7 @@ export default function UserManagementPage() {
                       <SortHeader label="User" k="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortHeader label="Role" k="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortHeader label="Client" k="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <th className="text-left px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Reports</th>
                       <SortHeader label="Status" k="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortHeader label="Last Login" k="last_login" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <th className="text-center px-5 py-4 text-xs text-gray-500 font-semibold uppercase tracking-wider">Actions</th>
@@ -782,6 +860,21 @@ export default function UserManagementPage() {
                           )}
                         </td>
 
+                        {/* Reports access (read-only) */}
+                        <td className="px-5 py-4">
+                          {u.role === "super_admin" ? (
+                            <span className="text-xs text-gray-500 italic">Full access</span>
+                          ) : parseUserPerms(u.permissions).includes("journey_analytics") ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-green-500/10 text-green-300 border border-green-500/20">
+                              ✓ Journey Analytics
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-white/5 text-gray-400 border border-white/10">
+                              No access
+                            </span>
+                          )}
+                        </td>
+
                         {/* Status badge (read-only) */}
                         <td className="px-5 py-4">
                           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
@@ -810,6 +903,7 @@ export default function UserManagementPage() {
                               onChangeRole={changeRole}
                               onChangeClient={changeClient}
                               onToggle={toggleAccess}
+                              onTogglePerms={toggleJourneyAnalytics}
                               onDelete={deleteUser}
                             />
                           </div>

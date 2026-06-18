@@ -12,6 +12,7 @@ export interface CurrentUser {
   phone_number: string | null;
   is_active: number;
   clientName: string | null;
+  permissions: string[];
 }
 
 export function useCurrentUser(): CurrentUser | undefined {

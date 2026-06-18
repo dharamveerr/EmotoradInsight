@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import getDb from "@/lib/db";
 import { createSession, COOKIE } from "@/lib/auth";
 import { getActiveClient } from "@/lib/client-context";
+import { parsePermissions } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   const username = req.headers.get("x-user-name") || "";
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   const db = await getDb();
   const user = await db
-    .prepare("SELECT id, username, email, name, picture, phone_number, role, is_active FROM app_users WHERE username = ? OR email = ?")
+    .prepare("SELECT id, username, email, name, picture, phone_number, role, is_active, permissions FROM app_users WHERE username = ? OR email = ?")
     .get<{
       id: string;
       username: string | null;
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
       phone_number: string | null;
       role: string;
       is_active: number;
+      permissions: string | null;
     }>(username, username);
 
   // Active client's display name — shown in the sidebar header for client admins.
@@ -34,6 +36,7 @@ export async function GET(req: NextRequest) {
     phone_number: user?.phone_number || null,
     is_active: user?.is_active ?? 1,
     clientName: client?.name || null,
+    permissions: parsePermissions(user?.permissions),
   });
 }
 

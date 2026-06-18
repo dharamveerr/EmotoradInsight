@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import getDb from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 import { getActiveClientId, getSessionUser } from "@/lib/client-context";
+import { denyIfNoReports } from "@/lib/permissions";
 
 // Trees are containers for journeys, scoped to a client. One tree may be
 // published per client — that client's published tree drives its dashboard.
@@ -10,6 +11,8 @@ import { getActiveClientId, getSessionUser } from "@/lib/client-context";
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const denied = await denyIfNoReports(req);
+  if (denied) return denied;
 
   // Super admin may list any client's trees via ?clientId= (used by tree copy).
   // Everyone else is restricted to their active client.
