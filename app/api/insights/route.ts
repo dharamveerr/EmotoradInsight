@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import getDb from "@/lib/db";
 import { getJourneyConfig } from "@/lib/journey-config";
 import { getActiveClientId } from "@/lib/client-context";
+import { ensureHydrated } from "@/lib/source-fetch";
 
 // Helper: returns SQL clause + params for optional date range filtering
 function df(from: string, to: string) {
@@ -20,6 +21,10 @@ export async function GET(req: NextRequest) {
   const journey = searchParams.get("journey") || "";
   const from    = searchParams.get("from")    || "";
   const to      = searchParams.get("to")      || "";
+
+  // Lazily pull this range from the source (via N8N) before reading local events.
+  // Default range = current date. No-op when sync isn't configured.
+  await ensureHydrated(from, to);
 
   const db = await getDb();
   const { clause: dc, p: dp } = df(from, to);

@@ -2,16 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import getDb from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
-import { getActiveClientId } from "@/lib/client-context";
+import { getActiveClientId, getSessionUser } from "@/lib/client-context";
 
 // Trees are containers for journeys, scoped to a client. One tree may be
 // published per client — that client's published tree drives its dashboard.
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const clientId = await getActiveClientId();
+  // Super admin may list any client's trees via ?clientId= (used by tree copy).
+  // Everyone else is restricted to their active client.
+  const askedClient = new URL(req.url).searchParams.get("clientId");
+  let clientId: string | null;
+  if (askedClient) {
+    const user = await getSessionUser();
+    if (user?.role !== "super_admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    clientId = askedClient;
+  } else {
+    clientId = await getActiveClientId();
+  }
   if (!clientId) return NextResponse.json({ trees: [] });
 
   const db = await getDb();

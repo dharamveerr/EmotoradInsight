@@ -11,6 +11,7 @@ export interface CurrentUser {
   picture: string | null;
   phone_number: string | null;
   is_active: number;
+  clientName: string | null;
 }
 
 export function useCurrentUser(): CurrentUser | undefined {

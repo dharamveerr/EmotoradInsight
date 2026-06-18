@@ -16,9 +16,10 @@ export async function proxy(req: NextRequest) {
     const username = (payload.username as string) || "";
     const role = (payload.role as string) || "admin";
 
-    // Protect /user-management — super_admin only
+    // Protect /user-management and /client-list — super_admin only
     if (
-      req.nextUrl.pathname.startsWith("/user-management") &&
+      (req.nextUrl.pathname.startsWith("/user-management") ||
+        req.nextUrl.pathname.startsWith("/client-list")) &&
       role !== "super_admin"
     ) {
       return NextResponse.redirect(new URL("/", req.url));

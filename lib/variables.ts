@@ -32,14 +32,81 @@ export async function getAllVariablesFromDB(clientId?: string | null): Promise<s
   return Array.from(vars).sort();
 }
 
+export type ClientVariable = { name: string; is_new: boolean };
+
 /**
- * Get all custom variables from database
+ * Get the synced source-variable names for a client (from chat_log_variable,
+ * delivered by N8N). `is_new` marks variables added in the latest sync that
+ * were not present in any earlier sync.
  */
-export async function getCustomVariables(): Promise<Variable[]> {
+export async function getClientVariables(clientId: string): Promise<ClientVariable[]> {
   const db = await getDb();
   const rows = await db
-    .prepare("SELECT * FROM variables ORDER BY name ASC")
-    .all<Variable>();
+    .prepare("SELECT name, is_new FROM client_variables WHERE client_id = ? ORDER BY name ASC")
+    .all<{ name: string; is_new: number }>(clientId);
+  return rows.map((r) => ({ name: r.name, is_new: !!r.is_new }));
+}
+
+/**
+ * Merge a fresh variable list into a client's set — additive only. Names are
+ * normalized to the "@" convention; blanks dropped. Existing variables are
+ * NEVER removed (only the user can delete them). Variables seen before lose
+ * their "new" flag; variables not seen before are inserted flagged is_new=1 so
+ * they surface under a "New" category in the tree's Variables panel.
+ */
+export async function mergeClientVariables(clientId: string, names: string[]): Promise<{ added: number; total: number }> {
+  const db = await getDb();
+  const clean = Array.from(
+    new Set(
+      names
+        .map((n) => String(n || "").trim())
+        .filter((n) => n !== "")
+        .map((n) => (n.startsWith("@") ? n : `@${n}`))
+    )
+  );
+
+  const existingRows = await db
+    .prepare("SELECT name FROM client_variables WHERE client_id = ?")
+    .all<{ name: string }>(clientId);
+  const existing = new Set(existingRows.map((r) => r.name));
+
+  // Clear stale "new" marks — only this sync's fresh additions stay flagged.
+  await db.prepare("UPDATE client_variables SET is_new = 0 WHERE client_id = ?").run(clientId);
+
+  const now = new Date().toISOString();
+  let added = 0;
+  for (const name of clean) {
+    if (existing.has(name)) continue;
+    await db
+      .prepare(
+        "INSERT INTO client_variables (id, client_id, name, created_at, is_new) VALUES (?, ?, ?, ?, 1) ON CONFLICT(client_id, name) DO NOTHING"
+      )
+      .run(uuidv4(), clientId, name, now);
+    added++;
+  }
+  return { added, total: existing.size + added };
+}
+
+/**
+ * Delete a single synced variable for a client (user-initiated). Re-sync will
+ * not resurrect it unless it is still present in the source query.
+ */
+export async function deleteClientVariable(clientId: string, name: string): Promise<boolean> {
+  const db = await getDb();
+  const res = await db
+    .prepare("DELETE FROM client_variables WHERE client_id = ? AND name = ?")
+    .run(clientId, name);
+  return res.changes > 0;
+}
+
+/**
+ * Get custom variables for a client (client-scoped only)
+ */
+export async function getCustomVariables(clientId?: string | null): Promise<Variable[]> {
+  const db = await getDb();
+  const rows = clientId
+    ? await db.prepare("SELECT * FROM variables WHERE client_id = ? ORDER BY name ASC").all<Variable>(clientId)
+    : await db.prepare("SELECT * FROM variables WHERE client_id IS NULL ORDER BY name ASC").all<Variable>();
   return rows;
 }
 
@@ -66,19 +133,20 @@ export async function getVariableByName(name: string): Promise<Variable | null> 
 }
 
 /**
- * Create new variable
+ * Create new variable scoped to a client
  */
 export async function createVariable(
   name: string,
-  description?: string
+  description?: string,
+  clientId?: string | null
 ): Promise<Variable> {
   const db = await getDb();
   const id = uuidv4();
   const now = new Date().toISOString();
 
   await db.prepare(
-    "INSERT INTO variables (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
-  ).run(id, name, description || null, now, now);
+    "INSERT INTO variables (id, name, client_id, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(id, name, clientId || null, description || null, now, now);
 
   return { id, name, description, created_at: now, updated_at: now };
 }

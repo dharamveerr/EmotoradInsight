@@ -92,6 +92,7 @@ export type Session = {
 export type Variable = {
   id: string;
   name: string;
+  client_id?: string | null;
   description?: string;
   created_at: string;
   updated_at: string;

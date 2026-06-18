@@ -4,6 +4,8 @@ import { getActiveClientId } from "@/lib/client-context";
 import {
   getCustomVariables,
   getAllVariablesFromDB,
+  getClientVariables,
+  deleteClientVariable,
   createVariable,
   updateVariable,
   deleteVariable,
@@ -14,15 +16,29 @@ export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const variables = await getCustomVariables();
-
-  // Auto-discover @ variables present in the active client's event metadata.
-  // These appear in the tree's Variables panel alongside manually-added ones.
   const clientId = await getActiveClientId();
+  const variables = await getCustomVariables(clientId);
+
+  // Discover @ variables for the active client from two sources:
+  //  1. client_variables — DISTINCT variable_name synced from chat_log_variable (N8N).
+  //     Carries is_new so freshly-synced ones can show under a "New" category.
+  //  2. event metadata keys — vars seen in already-ingested events (is_new=false).
+  // Both surface in the tree's Variables panel alongside manually-added ones.
   const customNames = new Set(variables.map((v) => v.name));
-  const discovered = (await getAllVariablesFromDB(clientId))
-    .filter((name) => name.startsWith("@") && !customNames.has(name))
-    .map((name) => ({ name }));
+  const seen = new Set<string>(customNames);
+
+  const synced = clientId
+    ? (await getClientVariables(clientId)).map((v) => ({ ...v, synced: true }))
+    : [];
+  const fromEvents = (await getAllVariablesFromDB(clientId)).map((name) => ({ name, is_new: false, synced: false }));
+
+  const discovered = [...synced, ...fromEvents]
+    .filter((v) => {
+      if (!v.name.startsWith("@") || seen.has(v.name)) return false;
+      seen.add(v.name);
+      return true;
+    })
+    .map((v) => ({ name: v.name, is_new: v.is_new, synced: v.synced }));
 
   return NextResponse.json({ variables, discovered });
 }
@@ -53,7 +69,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const variable = await createVariable(name, description);
+  const clientId = await getActiveClientId();
+  const variable = await createVariable(name, description, clientId);
   return NextResponse.json(variable, { status: 201 });
 }
 
@@ -79,7 +96,17 @@ export async function DELETE(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await req.json();
+  const { id, name } = await req.json();
+
+  // Synced/discovered variable delete (by name, scoped to active client).
+  // These live in client_variables, not the custom `variables` table.
+  if (!id && name) {
+    const clientId = await getActiveClientId();
+    if (!clientId) return NextResponse.json({ error: "No active client" }, { status: 400 });
+    const ok = await deleteClientVariable(clientId, String(name));
+    if (!ok) return NextResponse.json({ error: "Variable not found" }, { status: 404 });
+    return NextResponse.json({ success: true });
+  }
 
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });

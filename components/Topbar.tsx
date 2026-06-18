@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
@@ -8,6 +8,7 @@ import ClientSwitcher from "./ClientSwitcher";
 import ProfileEditModal from "./ProfileEditModal";
 import Avatar from "./Avatar";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { useMobileNav } from "@/components/Sidebar";
 
 function UserAvatar({ name, picture }: { name: string; picture: string | null }) {
   return <Avatar name={name} picture={picture} className="w-9 h-9" textClass="text-sm" />;
@@ -15,95 +16,15 @@ function UserAvatar({ name, picture }: { name: string; picture: string | null })
 
 // Create a new client (tenant). Super admin only — this is the sole place
 // clients can be added. On success switches to the new client.
-function AddClientModal({ onClose }: { onClose: () => void }) {
-  const [form, setForm] = useState({ name: "", subdomain: "", org_id: "", client_id: "" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-    setBusy(true);
-    setError("");
-    const res = await fetch("/api/clients", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.name.trim(),
-        subdomain: form.subdomain.trim(),
-        org_id: form.org_id.trim(),
-        client_id: form.client_id.trim(),
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) { setBusy(false); setError(data.error || "Failed to create client"); return; }
-    // Switch to the new client, then reload so the dashboard reflects it
-    await fetch("/api/active-client", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId: data.id }),
-    });
-    window.location.reload();
-  }
-
-  const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50";
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={onClose}>
-      <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-3 p-5 border-b border-white/5">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-lg">🏢</div>
-          <div>
-            <h3 className="text-base font-bold text-white">Add Client</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Create a tenant + link its source data</p>
-          </div>
-        </div>
-        <form onSubmit={submit} className="p-5 space-y-4">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-sm text-red-300">{error}</div>
-          )}
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5 font-medium">Display name <span className="text-red-400">*</span></label>
-            <input autoFocus value={form.name} onChange={set("name")} placeholder="e.g. Leverage" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5 font-medium">Subdomain</label>
-            <input value={form.subdomain} onChange={set("subdomain")} placeholder="e.g. leverage" className={inputCls} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">org_id</label>
-              <input value={form.org_id} onChange={set("org_id")} placeholder="source org id" className={`${inputCls} font-mono`} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">client_id</label>
-              <input value={form.client_id} onChange={set("client_id")} placeholder="source client id" className={`${inputCls} font-mono`} />
-            </div>
-          </div>
-          <p className="text-[10px] text-gray-500">org_id + client_id link this tenant to its rows in <code className="text-gray-400">chat_log_variable</code>. N8N matches on these to route data.</p>
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-white/15 text-sm font-medium text-gray-200 hover:border-white/40 transition-all" style={{ background: "rgba(255,255,255,0.05)" }}>
-              Cancel
-            </button>
-            <button type="submit" disabled={busy || !form.name.trim()} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-fuchsia-600 text-sm font-semibold text-white hover:from-purple-400 hover:to-fuchsia-500 transition-all disabled:opacity-50">
-              {busy ? "Creating…" : "Create Client"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 export default function Topbar({ title, subtitle }: { title: string; subtitle?: string }) {
   const router = useRouter();
+  const pathname = usePathname();
   const user = useCurrentUser();
+  const { toggle: toggleMobileNav } = useMobileNav();
+  const hideClientSwitcher = pathname === "/user-management" || pathname === "/client-list";
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
-  const [addClientOpen, setAddClientOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -144,24 +65,36 @@ export default function Topbar({ title, subtitle }: { title: string; subtitle?: 
 
   return (
     <>
-      <header className="app-topbar h-16 border-b border-white/5 bg-slate-950/50 backdrop-blur-xl flex items-center justify-between px-7 shrink-0 sticky top-0 z-20">
-        <div>
-          <h1 className="text-lg font-bold text-white">{title}</h1>
-          {subtitle && <p className="text-xs text-gray-400 tracking-wide mt-0.5">{subtitle}</p>}
+      <header className="app-topbar h-16 border-b border-white/5 bg-slate-950/50 backdrop-blur-xl flex items-center justify-between px-4 md:px-7 shrink-0 sticky top-0 z-20">
+        <div className="flex items-center gap-3">
+          {/* Hamburger — mobile only */}
+          <button
+            onClick={toggleMobileNav}
+            className="md:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+            aria-label="Open menu"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+              <path d="M3 12h18M3 6h18M3 18h18" />
+            </svg>
+          </button>
+          <div>
+            <h1 className="text-base md:text-lg font-bold text-white leading-tight">{title}</h1>
+            {subtitle && <p className="text-xs text-gray-400 tracking-wide mt-0.5 hidden sm:block">{subtitle}</p>}
+          </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <ClientSwitcher />
+        <div className="flex items-center gap-2 md:gap-4">
+          {!hideClientSwitcher && <div className="hidden sm:block"><ClientSwitcher /></div>}
           <ThemeToggle />
 
           {/* Profile button — mini menu with edit only */}
           <div className="relative" ref={profileRef}>
             <button
               onClick={() => setProfileMenuOpen((o) => !o)}
-              className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+              className="flex items-center gap-2 md:gap-3 px-2 md:px-4 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
             >
               <UserAvatar name={displayName} picture={user?.picture || null} />
-              <div className="text-left">
+              <div className="text-left hidden md:block">
                 <p className="text-sm font-medium text-white truncate max-w-[120px]">{displayName}</p>
                 <p className="text-xs text-gray-400">{roleLabel}</p>
               </div>
@@ -285,19 +218,6 @@ export default function Topbar({ title, subtitle }: { title: string; subtitle?: 
                     </Link>
                   )}
 
-                  {user?.role === "super_admin" && (
-                    <button
-                      onClick={() => { setSettingsOpen(false); setAddClientOpen(true); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 text-purple-400">
-                        <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
-                        <path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
-                      </svg>
-                      Add Client
-                    </button>
-                  )}
-
                   <div className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors">
                     <div className="flex items-center gap-3 text-sm text-gray-300">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 text-blue-400">
@@ -351,10 +271,6 @@ export default function Topbar({ title, subtitle }: { title: string; subtitle?: 
         />
       )}
 
-      {/* Add client modal — super admin only */}
-      {addClientOpen && user?.role === "super_admin" && (
-        <AddClientModal onClose={() => setAddClientOpen(false)} />
-      )}
     </>
   );
 }

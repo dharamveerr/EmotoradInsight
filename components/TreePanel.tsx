@@ -28,6 +28,8 @@ export default function TreePanel({ selectedTreeId, onSelectTree }: TreePanelPro
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const filteredTrees = trees.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()));
 
   async function createTree() {
     const name = newName.trim();
@@ -139,6 +141,15 @@ export default function TreePanel({ selectedTreeId, onSelectTree }: TreePanelPro
           </button>
         )}
         {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
+        {!creating && trees.length > 0 && (
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search trees…"
+            className="w-full mt-3 glass rounded px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-green-500/40"
+          />
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -148,8 +159,10 @@ export default function TreePanel({ selectedTreeId, onSelectTree }: TreePanelPro
           <div className="text-xs text-gray-500 text-center py-8 px-2">
             No trees yet. Create a tree, add journeys inside it, then publish it to power the dashboard.
           </div>
+        ) : filteredTrees.length === 0 ? (
+          <div className="text-xs text-gray-500 text-center py-8">No trees match &ldquo;{search}&rdquo;</div>
         ) : (
-          trees.map((tree) => (
+          filteredTrees.map((tree) => (
             <div
               key={tree.id}
               onClick={() => onSelectTree(tree)}

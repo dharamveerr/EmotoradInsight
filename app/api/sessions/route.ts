@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import getDb from "@/lib/db";
 import { getJourneyConfig } from "@/lib/journey-config";
 import { getActiveClientId } from "@/lib/client-context";
+import { ensureHydrated } from "@/lib/source-fetch";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -17,6 +18,10 @@ export async function GET(req: NextRequest) {
   const from    = searchParams.get("from") || "";
   const to      = searchParams.get("to")   || "";
   const exportFormat = searchParams.get("export"); // "csv" | "excel"
+
+  // Hydrate the list range from source (via N8N) before reading local events.
+  // Detail view (userId+journey) reads already-present events — no fetch needed.
+  if (!(userId && journey)) await ensureHydrated(from, to);
 
   const db = await getDb();
   // Client scoping (alias `e` for the joined list query, plain for the rest)

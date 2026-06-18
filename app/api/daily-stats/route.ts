@@ -3,15 +3,23 @@ import { getSession } from "@/lib/auth";
 import getDb from "@/lib/db";
 import { getJourneyConfig } from "@/lib/journey-config";
 import { getActiveClientId } from "@/lib/client-context";
+import { ensureHydrated } from "@/lib/source-fetch";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const sp = new URL(req.url).searchParams;
+  const journey = sp.get("journey") || "";
+  const from = sp.get("from") || "";
+  const to = sp.get("to") || "";
+
+  // Hydrate the requested range from source (via N8N); defaults to current date.
+  await ensureHydrated(from, to);
+
   const db = await getDb();
   const { steps: JOURNEY_STEPS } = await getJourneyConfig();
   const clientId = await getActiveClientId();
-  const journey = new URL(req.url).searchParams.get("journey") || "";
 
   // Compose WHERE: active client + journey scope. A specific journey filters to
   // it; otherwise restrict to the published tree's journeys (matches the other

@@ -111,7 +111,7 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in">
+      <div className="cl-modal bg-gray-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in">
         {/* Modal header */}
         <div className="flex items-start justify-between p-6 border-b border-white/10">
           <div className="flex items-center gap-4">
@@ -226,7 +226,7 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-sm font-semibold text-white hover:from-green-400 hover:to-emerald-500 transition-all disabled:opacity-50"
+              className="cl-create-btn flex-1 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-semibold text-white border border-slate-500/50 shadow-sm tracking-wide transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] cursor-pointer"
             >
               {loading ? "Creating…" : "Create User"}
             </button>
@@ -639,7 +639,28 @@ export default function UserManagementPage() {
         {/* Users Tab */}
         {tab === "users" && (
           <div className="glass rounded-2xl overflow-hidden animate-fade-in">
-            {sortedUsers.length === 0 ? (
+            {!usersData ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      {[...Array(6)].map((_, i) => (
+                        <th key={`header-${i}`} className="px-5 py-4"><div className="skeleton h-3 w-16 rounded"></div></th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {[...Array(5)].map((_, i) => (
+                      <tr key={`skeleton-${i}`}>
+                        {[...Array(6)].map((_, j) => (
+                          <td key={`cell-${j}`} className="px-5 py-4"><div className="skeleton h-4 w-20 rounded"></div></td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : sortedUsers.length === 0 ? (
               <div className="p-12 text-center text-gray-500">{users.length === 0 ? "No users found" : "No users match your filters"}</div>
             ) : (
               <div className="overflow-x-auto">
@@ -730,7 +751,28 @@ export default function UserManagementPage() {
         {/* Session History Tab */}
         {tab === "sessions" && (
           <div className="glass rounded-2xl overflow-hidden animate-fade-in">
-            {sessions.length === 0 ? (
+            {!sessionsData ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      {[...Array(6)].map((_, i) => (
+                        <th key={`header-${i}`} className="px-5 py-4"><div className="skeleton h-3 w-16 rounded"></div></th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {[...Array(5)].map((_, i) => (
+                      <tr key={`skeleton-${i}`}>
+                        {[...Array(6)].map((_, j) => (
+                          <td key={`cell-${j}`} className="px-5 py-4"><div className="skeleton h-4 w-20 rounded"></div></td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : sessions.length === 0 ? (
               <div className="p-12 text-center text-gray-500">No activity yet</div>
             ) : (
               <div className="overflow-x-auto">

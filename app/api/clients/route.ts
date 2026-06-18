@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import getDb from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 import { getSessionUser } from "@/lib/client-context";
+import { triggerVariableSync } from "@/lib/n8n";
 
 // Clients = tenants. Super admin manages them; client admins see only their own.
 export async function GET() {
@@ -38,10 +39,14 @@ export async function POST(req: NextRequest) {
 
   const { name, subdomain, org_id, client_id } = await req.json();
   const cleanName = String(name || "").trim();
-  if (!cleanName) return NextResponse.json({ error: "Client name is required" }, { status: 400 });
   const orgId = String(org_id || "").trim();
   const sourceClientId = String(client_id || "").trim();
   const sub = String(subdomain || "").trim().toLowerCase();
+  // All four are required at creation — subdomain/org_id/client_id are immutable
+  // afterward (they bind the tenant to its source rows), so they must be set now.
+  if (!cleanName || !sub || !orgId || !sourceClientId) {
+    return NextResponse.json({ error: "name, subdomain, org_id and client_id are all required" }, { status: 400 });
+  }
 
   const db = await getDb();
   const clash = await db
@@ -64,6 +69,9 @@ export async function POST(req: NextRequest) {
     "INSERT INTO clients (id, name, slug, subdomain, org_id, source_client_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(id, cleanName, slug, sub || null, orgId || null, sourceClientId || null, now, now);
 
+  // Kick off variable discovery via N8N (DISTINCT variable_name, last 15 days).
+  if (orgId && sourceClientId) triggerVariableSync(orgId, sourceClientId);
+
   return NextResponse.json({ id, name: cleanName, slug, subdomain: sub, org_id: orgId, source_client_id: sourceClientId, created_at: now }, { status: 201 });
 }
 
@@ -74,7 +82,9 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Only super admin can edit clients" }, { status: 403 });
   }
 
-  const { id, name, subdomain, org_id, client_id } = await req.json();
+  // Only the display name is editable. subdomain/org_id/client_id are immutable
+  // after creation — they bind the tenant to its source rows in chat_log_variable.
+  const { id, name } = await req.json();
   const cleanName = String(name || "").trim();
   if (!id || !cleanName) return NextResponse.json({ error: "Missing id or name" }, { status: 400 });
 
@@ -85,15 +95,8 @@ export async function PUT(req: NextRequest) {
   if (clash) return NextResponse.json({ error: "A client with this name already exists" }, { status: 409 });
 
   const now = new Date().toISOString();
-  await db.prepare(
-    "UPDATE clients SET name = ?, subdomain = ?, org_id = ?, source_client_id = ?, updated_at = ? WHERE id = ?"
-  ).run(
-    cleanName,
-    String(subdomain || "").trim().toLowerCase() || null,
-    String(org_id || "").trim() || null,
-    String(client_id || "").trim() || null,
-    now, id
-  );
+  await db.prepare("UPDATE clients SET name = ?, updated_at = ? WHERE id = ?")
+    .run(cleanName, now, id);
   return NextResponse.json({ id, name: cleanName });
 }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import getDb from "@/lib/db";
 import { createSession, COOKIE } from "@/lib/auth";
+import { getActiveClient } from "@/lib/client-context";
 
 export async function GET(req: NextRequest) {
   const username = req.headers.get("x-user-name") || "";
@@ -20,6 +21,9 @@ export async function GET(req: NextRequest) {
       is_active: number;
     }>(username, username);
 
+  // Active client's display name — shown in the sidebar header for client admins.
+  const client = await getActiveClient();
+
   return NextResponse.json({
     id: user?.id || "",
     username: user?.username || username,
@@ -29,6 +33,7 @@ export async function GET(req: NextRequest) {
     picture: user?.picture || null,
     phone_number: user?.phone_number || null,
     is_active: user?.is_active ?? 1,
+    clientName: client?.name || null,
   });
 }
 

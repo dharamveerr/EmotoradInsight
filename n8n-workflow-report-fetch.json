@@ -1,0 +1,158 @@
+{
+  "name": "Report Data Fetch (≤15 days chunked)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "report-fetch",
+        "httpMethod": "POST"
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const from = new Date($json.from);\nconst to = new Date($json.to);\nconst ranges = [];\n\nlet current = new Date(from);\nwhile (current < to) {\n  const rangeEnd = new Date(current);\n  rangeEnd.setDate(rangeEnd.getDate() + 15);\n  \n  const rangeStart = current.toISOString().split('T')[0];\n  const rangeEndStr = rangeEnd > to ? to.toISOString().split('T')[0] : rangeEnd.toISOString().split('T')[0];\n  \n  ranges.push({\n    start: rangeStart,\n    end: rangeEndStr\n  });\n  \n  current = rangeEnd;\n}\n\nreturn { ranges, org_id: $json.org_id, client_id: $json.client_id };"
+      },
+      "id": "splitRanges",
+      "name": "Split into 15-day ranges",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "loopProperty": "ranges"
+      },
+      "id": "loopRanges",
+      "name": "Loop each range",
+      "type": "n8n-nodes-base.loop",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "host": "your-source-db-host",
+        "port": 5432,
+        "database": "source_db_name",
+        "user": "source_user",
+        "password": "source_password",
+        "ssl": false,
+        "query": "SELECT \n  userid,\n  journey,\n  step,\n  timestamp,\n  metadata\nFROM chat_log_variable\nWHERE org_id = $1\n  AND client_id = $2\n  AND created_at >= $3::date\n  AND created_at < $4::date\nORDER BY timestamp ASC;",
+        "queryParams": [
+          "{{ $json.org_id }}",
+          "{{ $json.client_id }}",
+          "{{ $node[\"loopRanges\"].context.item.start }}",
+          "{{ $node[\"loopRanges\"].context.item.end }}"
+        ]
+      },
+      "id": "postgresQuery",
+      "name": "Query Source DB",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Collect all rows from loop iterations\nconst allRows = [];\n\nif ($input.all() && Array.isArray($input.all())) {\n  $input.all().forEach(item => {\n    if (item.rows && Array.isArray(item.rows)) {\n      allRows.push(...item.rows);\n    }\n  });\n}\n\nreturn {\n  rows: allRows.map(row => ({\n    userId: row.userid || row.userId,\n    journey: row.journey,\n    step: row.step,\n    timestamp: row.timestamp,\n    metadata: row.metadata,\n    org_id: $json.org_id,\n    client_id: $json.client_id\n  }))\n};"
+      },
+      "id": "aggregateResults",
+      "name": "Aggregate all rows",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/insights",
+        "method": "POST",
+        "headers": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-n8n-secret",
+              "value": "your-secret-key"
+            }
+          ]
+        },
+        "body": {
+          "mode": "json",
+          "json": {
+            "rows": "{{ $json.rows }}",
+            "org_id": "{{ $json.rows[0]?.org_id }}",
+            "client_id": "{{ $json.rows[0]?.client_id }}"
+          }
+        }
+      },
+      "id": "sendToApp",
+      "name": "Send to App",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "webhook": {
+      "main": [
+        [
+          {
+            "node": "splitRanges",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "splitRanges": {
+      "main": [
+        [
+          {
+            "node": "loopRanges",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "loopRanges": {
+      "main": [
+        [
+          {
+            "node": "postgresQuery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "postgresQuery": {
+      "main": [
+        [
+          {
+            "node": "aggregateResults",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "aggregateResults": {
+      "main": [
+        [
+          {
+            "node": "sendToApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {}
+}

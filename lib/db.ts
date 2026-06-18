@@ -232,6 +232,22 @@ async function initDb(): Promise<DB> {
       updated_at TEXT NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_clients_slug ON clients(slug)`,
+
+    `CREATE TABLE IF NOT EXISTS client_variables (
+      id TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(client_id, name)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_client_variables ON client_variables(client_id)`,
+
+    `CREATE TABLE IF NOT EXISTS source_fetch_log (
+      client_id TEXT NOT NULL,
+      day TEXT NOT NULL,
+      fetched_at TEXT NOT NULL,
+      PRIMARY KEY (client_id, day)
+    )`,
   ];
 
   for (const stmt of ddl) {
@@ -254,6 +270,27 @@ async function initDb(): Promise<DB> {
   await addColumn("ALTER TABLE clients ADD COLUMN source_client_id TEXT");
   await addColumn("ALTER TABLE clients ADD COLUMN subdomain TEXT");
   await addColumn("ALTER TABLE clients ADD COLUMN last_synced_at TEXT");
+  // Flag synced variables added in the most recent sync (shown as "New")
+  await addColumn("ALTER TABLE client_variables ADD COLUMN is_new INTEGER DEFAULT 0");
+
+  // Migrate variables table to be client-scoped (one-time, safe)
+  const varCols = await client.execute("PRAGMA table_info(variables)");
+  const hasVarClientId = (varCols.rows as unknown as { name: string }[]).some((c) => c.name === "client_id");
+  if (!hasVarClientId) {
+    await client.execute("ALTER TABLE variables RENAME TO variables_old");
+    await client.execute(`CREATE TABLE variables (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      client_id TEXT,
+      description TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(client_id, name)
+    )`);
+    await client.execute("INSERT INTO variables SELECT id, name, NULL, description, created_at, updated_at FROM variables_old");
+    await client.execute("DROP TABLE variables_old");
+    await client.execute("CREATE INDEX IF NOT EXISTS idx_variables_name ON variables(name)");
+  }
   await client.execute("CREATE INDEX IF NOT EXISTS idx_journey_tree ON journeys(tree_id)");
   await client.execute("CREATE INDEX IF NOT EXISTS idx_trees_client ON trees(client_id)");
   await client.execute("CREATE INDEX IF NOT EXISTS idx_app_users_client ON app_users(client_id)");

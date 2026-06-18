@@ -2,8 +2,30 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+
+// Mobile drawer state — shared between Sidebar (renders drawer) and
+// Topbar (renders hamburger). Both are mounted in the same React tree
+// (DashboardLayout), so a context is the cleanest way to share it.
+const MobileNavCtx = createContext<{
+  open: boolean;
+  toggle: () => void;
+  close: () => void;
+}>({ open: false, toggle: () => {}, close: () => {} });
+
+export function MobileNavProvider({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <MobileNavCtx.Provider value={{ open, toggle: () => setOpen((o) => !o), close: () => setOpen(false) }}>
+      {children}
+    </MobileNavCtx.Provider>
+  );
+}
+
+export function useMobileNav() {
+  return useContext(MobileNavCtx);
+}
 
 const navItems = [
   {
@@ -75,6 +97,16 @@ const navItems = [
 
 const superAdminItems = [
   {
+    href: "/client-list",
+    label: "Client List",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M3 9h18" /><path d="M8 14h2" /><path d="M14 14h2" /><path d="M8 17h2" /><path d="M14 17h2" />
+      </svg>
+    ),
+  },
+  {
     href: "/user-management",
     label: "User Management",
     icon: (
@@ -88,42 +120,54 @@ const superAdminItems = [
   },
 ];
 
-export default function Sidebar() {
+function SidebarContent({
+  collapsed,
+  onCollapse,
+  onLinkClick,
+}: {
+  collapsed: boolean;
+  onCollapse?: () => void;
+  onLinkClick?: () => void;
+}) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
   const user = useCurrentUser();
   const isSuperAdmin = user?.role === "super_admin";
   const allNavItems = [...navItems, ...(isSuperAdmin ? superAdminItems : [])];
+  const brandName = isSuperAdmin ? "chatbot.team" : (user?.clientName || "chatbot.team");
 
   return (
-    <aside className={`app-sidebar shrink-0 bg-gradient-to-b from-slate-950 to-slate-900 border-r border-white/5 flex flex-col sticky top-0 h-screen relative z-20 transition-all duration-300 ${collapsed ? "w-20" : "w-64"}`}>
+    <div className="flex flex-col h-full">
       {/* Glow accent */}
       <div className="absolute top-0 left-0 w-full h-32 bg-green-500/5 blur-3xl pointer-events-none" />
 
-      {/* collapse toggle */}
-      <button
-        onClick={() => setCollapsed((c) => !c)}
-        title={collapsed ? "Expand" : "Collapse"}
-        className="collapse-btn absolute -right-3.5 top-8 z-20 w-7 h-7 rounded-full bg-slate-800 border border-white/10 text-gray-300 hover:text-white hover:bg-slate-700 flex items-center justify-center shadow-xl transition cursor-pointer"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`w-3.5 h-3.5 transition-transform ${collapsed ? "rotate-180" : ""}`}>
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-      </button>
+      {/* Desktop collapse toggle */}
+      {onCollapse && (
+        <button
+          onClick={onCollapse}
+          title={collapsed ? "Expand" : "Collapse"}
+          className="collapse-btn absolute -right-3.5 top-8 z-20 w-7 h-7 rounded-full bg-slate-800 border border-white/10 text-gray-300 hover:text-white hover:bg-slate-700 flex items-center justify-center shadow-xl transition cursor-pointer"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`w-3.5 h-3.5 transition-transform ${collapsed ? "rotate-180" : ""}`}>
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      )}
 
-      <div className="px-5 py-6 border-b border-white/5 relative sticky top-0 z-10" style={{ background: "inherit" }}>
+      {/* Header */}
+      <div className="px-5 py-6 border-b border-white/5 relative sticky top-0 z-10 shrink-0" style={{ background: "inherit" }}>
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/emotorad-logo.png" alt="Emotorad" className="w-10 h-10 rounded-xl shrink-0 shadow-lg shadow-blue-500/30" />
+          <img src="/emotorad-logo.png" alt="Logo" className="w-10 h-10 rounded-xl shrink-0 shadow-lg shadow-blue-500/30" />
           {!collapsed && (
             <div>
-              <p className="font-bold text-white text-sm leading-tight">Emotorad</p>
+              <p className="font-bold text-white text-sm leading-tight">{brandName}</p>
               <p className="text-gray-400 text-xs tracking-wide">Analytics Dashboard</p>
             </div>
           )}
         </div>
       </div>
 
+      {/* Nav */}
       <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto">
         {allNavItems.map((item, i) => {
           const active = pathname === item.href;
@@ -131,6 +175,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onLinkClick}
               style={{ animationDelay: `${i * 0.05}s` }}
               title={collapsed ? item.label : undefined}
               className={`group flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm transition-all duration-300 animate-slide-in relative overflow-hidden ${collapsed ? "justify-center" : ""} ${
@@ -151,12 +196,58 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="px-6 py-4 border-t border-white/5">
+      {/* Footer */}
+      <div className="px-6 py-4 border-t border-white/5 shrink-0">
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
           {!collapsed && "Live data · auto-refresh"}
         </div>
       </div>
-    </aside>
+    </div>
+  );
+}
+
+export default function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
+  const { open, close } = useMobileNav();
+  const pathname = usePathname();
+
+  // Close mobile drawer on route change
+  useEffect(() => { close(); }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <>
+      {/* ── Desktop sidebar (md+) ── */}
+      <aside className={`app-sidebar hidden md:flex flex-col shrink-0 bg-gradient-to-b from-slate-950 to-slate-900 border-r border-white/5 sticky top-0 h-screen relative z-20 transition-all duration-300 ${collapsed ? "w-20" : "w-64"}`}>
+        <SidebarContent collapsed={collapsed} onCollapse={() => setCollapsed((c) => !c)} />
+      </aside>
+
+      {/* ── Mobile overlay backdrop ── */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+          onClick={close}
+        />
+      )}
+
+      {/* ── Mobile drawer (slides in from left) ── */}
+      <aside
+        className={`fixed top-0 left-0 h-full w-72 bg-gradient-to-b from-slate-950 to-slate-900 border-r border-white/5 flex flex-col z-40 md:hidden transition-transform duration-300 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {/* Close button */}
+        <button
+          onClick={close}
+          className="absolute top-4 right-4 z-50 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-colors"
+          aria-label="Close menu"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+        <SidebarContent collapsed={false} onLinkClick={close} />
+      </aside>
+    </>
   );
 }

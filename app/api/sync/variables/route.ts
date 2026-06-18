@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import getDb from "@/lib/db";
-import { mapRows, SourceRow } from "@/lib/n8n-mapping";
-import { ingestRows } from "@/lib/ingest";
+import { mergeClientVariables } from "@/lib/variables";
 
-// Ingestion endpoint for N8N. N8N runs the `chat_log_variable` Postgres query
-// per client and POSTs the rows here. Rows are mapped to events, scoped to the
-// matching internal client, and upserted idempotently.
+// Variable-discovery endpoint for N8N. After a client is added, N8N runs:
+//   SELECT DISTINCT variable_name FROM chat_log_variable
+//   WHERE org_id = ? AND client_id = ?
+//     AND created_at >= NOW() - INTERVAL '15 days'
+// and POSTs the resulting names here (POST /api/sync/variables). They are
+// stored per-client and surface in the Create Tree variables panel.
 //
 // Auth: header `x-n8n-secret` must equal env N8N_WEBHOOK_SECRET.
-// Body: { org_id, client_id, rows: [ ...chat_log_variable rows... ], dryRun? }
+// Body: { org_id, client_id, variables: string[] }
 //   - org_id, client_id are the EXTERNAL source identifiers (not internal id)
-//   - dryRun: if true, parse + report only, write nothing (for verifying mapping)
+//   - variables: the DISTINCT variable_name values from the source query
 
 function authed(req: NextRequest): boolean {
   const secret = process.env.N8N_WEBHOOK_SECRET;
@@ -23,7 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { org_id?: string; client_id?: string; rows?: SourceRow[]; dryRun?: boolean };
+  let body: { org_id?: string; client_id?: string; variables?: unknown[] };
   try {
     body = await req.json();
   } catch {
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest) {
 
   const orgId = String(body.org_id || "").trim();
   const sourceClientId = String(body.client_id || "").trim();
-  const rows = Array.isArray(body.rows) ? body.rows : [];
+  const names = Array.isArray(body.variables) ? body.variables.map((v) => String(v)) : [];
   if (!orgId || !sourceClientId) {
     return NextResponse.json({ error: "org_id and client_id are required" }, { status: 400 });
   }
@@ -48,28 +50,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { events, skipped } = mapRows(rows);
+  const { added, total } = await mergeClientVariables(client.id, names);
+  await db
+    .prepare("UPDATE clients SET last_synced_at = ? WHERE id = ?")
+    .run(new Date().toISOString(), client.id);
 
-  // Dry run: echo what was parsed so the mapping can be verified against real data
-  if (body.dryRun) {
-    return NextResponse.json({
-      dryRun: true,
-      client: client.name,
-      received: rows.length,
-      mappedEvents: events.length,
-      skipped,
-      sample: events.slice(0, 5),
-    });
-  }
-
-  const result = await ingestRows(client.id, rows);
-
-  return NextResponse.json({
-    client: client.name,
-    received: result.received,
-    mappedEvents: result.mappedEvents,
-    written: result.written,
-    skipped: result.skipped,
-    lastSyncedAt: result.maxCreatedAt,
-  });
+  return NextResponse.json({ client: client.name, added, total });
 }

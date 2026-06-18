@@ -27,6 +27,8 @@ export default function JourneyList({
   );
   const journeys: Journey[] = data?.journeys || [];
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const filteredJourneys = journeys.filter((j) => j.name.toLowerCase().includes(search.toLowerCase()));
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this journey?")) return;
@@ -62,6 +64,15 @@ export default function JourneyList({
         >
           + New Journey
         </button>
+        {treeId && journeys.length > 0 && (
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search journeys…"
+            className="w-full mt-3 glass rounded px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500/40"
+          />
+        )}
       </div>
 
       {/* Journey List */}
@@ -76,8 +87,10 @@ export default function JourneyList({
           <div className="text-xs text-gray-500 text-center py-8 px-2">
             No journeys in this tree yet
           </div>
+        ) : filteredJourneys.length === 0 ? (
+          <div className="text-xs text-gray-500 text-center py-8">No journeys match &ldquo;{search}&rdquo;</div>
         ) : (
-          journeys.map((journey: Journey) => (
+          filteredJourneys.map((journey: Journey) => (
             <div
               key={journey.id}
               onClick={() => onSelectJourney(journey.id)}

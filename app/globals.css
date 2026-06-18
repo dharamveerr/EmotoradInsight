@@ -5,6 +5,11 @@
   100% { background-position: -200% 0; }
 }
 
+@keyframes shimmer {
+  0%   { background-position: 1000px 0; }
+  100% { background-position: -1000px 0; }
+}
+
 :root {
   --background: #060b14;
   --foreground: #e8edf4;
@@ -386,3 +391,25 @@ html.light .ls-dropdown .ls-item:hover   { color: #0f172a !important; }
 /* Live / Draft badges — light mode */
 html.light .ls-live  { color: #14532d !important; background-color: rgba(34,197,94,0.2) !important; border-color: rgba(34,197,94,0.5) !important; }
 html.light .ls-draft { color: #1e3a5f !important; background-color: rgba(100,116,139,0.2) !important; border-color: rgba(100,116,139,0.4) !important; }
+
+/* Client-list modal: dark-bg modal turns white in light mode, so force
+   readable dark text on its content and buttons. */
+html.light .cl-modal [class~="text-white"]      { color: #0f172a !important; }
+html.light .cl-modal [class~="text-gray-200"]   { color: #334155 !important; }
+html.light .cl-modal [class~="text-gray-300"]   { color: #334155 !important; }
+html.light .cl-modal [class~="text-gray-400"]   { color: #64748b !important; }
+html.light .cl-modal [class~="text-purple-200"] { color: #6d28d9 !important; }
+html.light .cl-modal input                       { color: #0f172a !important; }
+html.light .cl-modal .cl-save                    { color: #6d28d9 !important; }
+html.light .cl-modal .cl-cancel                  { color: #334155 !important; }
+
+/* Create Client button — light mode: visible outlined style like Cancel */
+html.light .cl-modal .cl-create-btn               { background: #1e293b !important; color: #ffffff !important; border-color: #334155 !important; }
+html.light .cl-modal .cl-create-btn:disabled       { background: #cbd5e1 !important; color: #64748b !important; border-color: #94a3b8 !important; opacity: 1 !important; }
+
+/* Toast — force dark bg + white text in light mode */
+html.light .cl-toast { background: #1e293b !important; color: #ffffff !important; border-color: #334155 !important; }
+
+/* Sync message banner — light mode */
+html.light [class~="text-red-400"]  { color: #dc2626; }
+html.light [class~="text-green-400"] { color: #16a34a; }
