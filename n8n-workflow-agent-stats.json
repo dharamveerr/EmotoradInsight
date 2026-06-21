@@ -1,0 +1,69 @@
+{
+  "name": "Agent Stats Sync (per agent + conversation snapshot)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "agent-stats-sync",
+        "httpMethod": "POST"
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "notes": "Copy this node's Production URL into the app env var N8N_AGENT_STATS_SYNC_URL. App POSTs { org_id, client_id } with header x-n8n-secret."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- ADJUST table/column names to your source agent console schema.\n-- Must return one row per (agent, customer) conversation with these aliases:\n--   agent_name, customer_contact, campaign_id,\n--   is_customer_replied (bool/0-1), customer_last_reply, customer_last_reply_at,\n--   is_agent_replied (bool/0-1), agent_last_reply, agent_last_reply_at,\n--   is_open (bool/0-1), created_at\nSELECT a.agent_name        AS agent_name,\n       a.customer_contact  AS customer_contact,\n       a.campaign_id       AS campaign_id,\n       a.is_customer_replied AS is_customer_replied,\n       a.customer_last_reply AS customer_last_reply,\n       a.customer_last_reply_at AS customer_last_reply_at,\n       a.is_agent_replied  AS is_agent_replied,\n       a.agent_last_reply  AS agent_last_reply,\n       a.agent_last_reply_at AS agent_last_reply_at,\n       a.is_open           AS is_open,\n       a.created_at        AS created_at\nFROM   agent_conversations a\nWHERE  a.org_id = $1\n  AND  a.client_id = $2;",
+        "options": {
+          "queryReplacement": "={{ $json.body.org_id }},{{ $json.body.client_id }}"
+        }
+      },
+      "id": "postgresQuery",
+      "name": "Query Agent Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "notes": "Set Operation = Execute Query. Use $1 = org_id, $2 = client_id as Query Parameters (org_id first, client_id second). Adjust the SQL to your source schema."
+    },
+    {
+      "parameters": {
+        "functionCode": "// Pass org_id/client_id through from the webhook and roll every queried row\n// into the agents[] list the callback expects.\nconst trigger = $node[\"Webhook\"].json.body || {};\nconst rows = $input.all();\nconst agents = rows.map((r) => ({\n  agent_name: r.json.agent_name,\n  customer_contact: r.json.customer_contact,\n  campaign_id: r.json.campaign_id,\n  is_customer_replied: r.json.is_customer_replied,\n  customer_last_reply: r.json.customer_last_reply,\n  customer_last_reply_at: r.json.customer_last_reply_at,\n  is_agent_replied: r.json.is_agent_replied,\n  agent_last_reply: r.json.agent_last_reply,\n  agent_last_reply_at: r.json.agent_last_reply_at,\n  is_open: r.json.is_open,\n  created_at: r.json.created_at\n}));\nreturn [{ json: { org_id: trigger.org_id, client_id: trigger.client_id, agents } }];"
+      },
+      "id": "shapeBody",
+      "name": "Shape Callback Body",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_APP_URL/api/sync/agent-stats",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-secret", "value": "YOUR_N8N_WEBHOOK_SECRET" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "callback",
+      "name": "POST results to app",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 300],
+      "notes": "x-n8n-secret MUST equal the app's N8N_WEBHOOK_SECRET. Replace YOUR_APP_URL with the deployed app origin."
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Query Agent Stats", "type": "main", "index": 0 }]] },
+    "Query Agent Stats": { "main": [[{ "node": "Shape Callback Body", "type": "main", "index": 0 }]] },
+    "Shape Callback Body": { "main": [[{ "node": "POST results to app", "type": "main", "index": 0 }]] }
+  }
+}

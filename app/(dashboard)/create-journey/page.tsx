@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { mutate as swrMutate } from "swr";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import useSWR, { mutate as swrMutate } from "swr";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 import Topbar from "@/components/Topbar";
 import TreePanel, { Tree } from "@/components/TreePanel";
 import JourneyList from "@/components/JourneyList";
@@ -12,7 +14,6 @@ import { v4 as uuidv4 } from "uuid";
 
 export default function CreateTreePage() {
   const [selectedTree, setSelectedTree] = useState<Tree | null>(null);
-  const [variables, setVariables] = useState<Variable[]>([]);
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null);
   const [currentJourney, setCurrentJourney] = useState<Journey | null>(null);
   const [draggedVariable, setDraggedVariable] = useState<string | null>(null);
@@ -25,25 +26,25 @@ export default function CreateTreePage() {
   const canRedo = future.length > 0;
   const [journeyName, setJourneyName] = useState("");
 
-  useEffect(() => {
-    fetchVariables();
-  }, []);
-
-  async function fetchVariables() {
-    const res = await fetch("/api/variables");
-    const data = await res.json();
+  // Shared SWR key with VariableManager — when the panel syncs/adds/deletes and
+  // calls mutate("/api/variables"), this list revalidates too, so newly-synced
+  // variables become draggable/selectable in the builder without a page reload.
+  const { data: varsData } = useSWR("/api/variables", fetcher);
+  const variables: Variable[] = useMemo(() => {
+    if (!varsData) return [];
     // Merge custom + data-discovered @ vars so any var stored on an option
     // resolves to a chip in the builder. Discovered vars use their name as id.
-    const custom: Variable[] = data.variables || [];
+    const custom: Variable[] = varsData.variables || [];
     const now = new Date().toISOString();
-    const discovered: Variable[] = (data.discovered || []).map((d: { name: string }) => ({
-      id: d.name,
-      name: d.name,
-      created_at: now,
-      updated_at: now,
-    }));
-    setVariables([...custom, ...discovered]);
-  }
+    const seen = new Set(custom.map((v) => v.id));
+    const discovered: Variable[] = [];
+    for (const d of (varsData.discovered || []) as { name: string }[]) {
+      if (seen.has(d.name)) continue; // same @name across templates → one chip
+      seen.add(d.name);
+      discovered.push({ id: d.name, name: d.name, created_at: now, updated_at: now });
+    }
+    return [...custom, ...discovered];
+  }, [varsData]);
 
   function refreshTreeData() {
     swrMutate("/api/trees");
@@ -248,7 +249,7 @@ export default function CreateTreePage() {
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Journey name input + controls */}
-        <div className="flex items-center gap-3 px-7 py-4 border-b border-white/10 bg-white/3">
+        <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-7 py-3 sm:py-4 border-b border-white/10 bg-white/3 flex-wrap">
           <div className="flex items-center gap-2 text-sm text-gray-400 shrink-0">
             <span className="text-base">🌳</span>
             <span className="font-semibold text-gray-200">
@@ -268,7 +269,7 @@ export default function CreateTreePage() {
             onChange={(e) => setJourneyName(e.target.value)}
             placeholder={selectedTree ? "Journey name…" : "Select a tree first"}
             disabled={!selectedTree}
-            className="glass rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/40 flex-1 disabled:opacity-50"
+            className="glass rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/40 flex-1 min-w-[140px] disabled:opacity-50"
           />
 
           <button
@@ -306,8 +307,10 @@ export default function CreateTreePage() {
           </button>
         </div>
 
-        {/* Four-column layout: Trees | Journeys | Builder | Variables */}
-        <div className="flex-1 flex overflow-hidden">
+        {/* Four-column layout: Trees | Journeys | Builder | Variables.
+            On narrow screens the columns keep their min widths and the row
+            scrolls horizontally instead of squashing into unusable slivers. */}
+        <div className="flex-1 flex overflow-x-auto overflow-y-hidden">
           <TreePanel selectedTreeId={selectedTree?.id || null} onSelectTree={handleSelectTree} />
 
           <JourneyList

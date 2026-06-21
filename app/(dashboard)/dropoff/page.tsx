@@ -43,7 +43,7 @@ export default function DropoffPage() {
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="Drop-off Analysis" subtitle="Where users abandon each journey" />
       <TypewriterLoader isLoading={isLoading} messages={["Analysing drop-off points...", "Scanning journey exits...", "Crunching abandonment rates...", "Report almost ready..."]} />
-      <main className="flex-1 p-7 space-y-6">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-7 space-y-6">
         <div className="flex items-center gap-6 flex-wrap animate-fade-in">
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium text-gray-400">Journey</label>
@@ -90,8 +90,8 @@ export default function DropoffPage() {
               </ResponsiveContainer>
             </div>
 
-            <div className="glass rounded-2xl overflow-hidden animate-fade-in delay-2">
-              <table className="w-full text-sm">
+            <div className="glass rounded-2xl overflow-x-auto animate-fade-in delay-2">
+              <table className="w-full text-sm min-w-[560px]">
                 <thead className="bg-white/5 border-b border-white/10">
                   <tr>
                     <th className="text-left px-5 py-3.5 text-gray-400 font-semibold">Step</th>

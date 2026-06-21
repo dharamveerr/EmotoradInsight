@@ -49,10 +49,8 @@ export async function POST(req: NextRequest) {
   }
 
   const db = await getDb();
-  const clash = await db
-    .prepare("SELECT id FROM clients WHERE LOWER(name) = LOWER(?)")
-    .get<{ id: string }>(cleanName);
-  if (clash) return NextResponse.json({ error: "A client with this name already exists" }, { status: 409 });
+  // Display name may repeat across tenants — identity is (org_id, client_id),
+  // not the name. Only that pair is enforced unique below.
 
   // (org_id, client_id) is the key N8N matches on — must be unique
   if (orgId && sourceClientId) {
@@ -89,10 +87,7 @@ export async function PUT(req: NextRequest) {
   if (!id || !cleanName) return NextResponse.json({ error: "Missing id or name" }, { status: 400 });
 
   const db = await getDb();
-  const clash = await db
-    .prepare("SELECT id FROM clients WHERE LOWER(name) = LOWER(?) AND id != ?")
-    .get<{ id: string }>(cleanName, id);
-  if (clash) return NextResponse.json({ error: "A client with this name already exists" }, { status: 409 });
+  // Duplicate display names allowed — no name-uniqueness check.
 
   const now = new Date().toISOString();
   await db.prepare("UPDATE clients SET name = ?, updated_at = ? WHERE id = ?")

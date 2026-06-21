@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Emotorad",
+  title: "chatbot.team",
   description: "WhatsApp Chatbot Analytics Dashboard",
   icons: {
     icon: [

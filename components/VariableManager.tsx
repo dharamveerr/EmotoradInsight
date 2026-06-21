@@ -36,6 +36,7 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
   const [syncError, setSyncError] = useState(false);
+  const [toast, setToast] = useState("");
 
   const matchesSearch = (name: string) => name.toLowerCase().includes(search.toLowerCase());
   const filtered = variables.filter((v: Variable) => matchesSearch(v.name));
@@ -66,7 +67,15 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
       // N8N runs the query and posts back asynchronously — give it a moment,
       // then refresh. Show progress so the user knows it's working.
       setSyncMsg("Syncing from source… refreshing shortly");
-      setTimeout(() => { mutate(); setSyncMsg(""); }, 6000);
+      setTimeout(async () => {
+        // Refetch, then notify with the resulting variable count so the user
+        // gets a clear "fetch done" confirmation.
+        const fresh = await mutate();
+        const count = (fresh?.variables?.length || 0) + (fresh?.discovered?.length || 0);
+        setSyncMsg("");
+        setToast(count > 0 ? `✓ ${count} variable${count === 1 ? "" : "s"} fetched` : "✓ Sync complete — no variables found");
+        setTimeout(() => setToast(""), 4000);
+      }, 6000);
     } catch {
       setSyncError(true);
       setSyncMsg("Sync failed");
@@ -138,7 +147,7 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
   };
 
   return (
-    <div className="w-80 bg-white/5 border-l border-white/10 flex flex-col overflow-hidden">
+    <div className="w-80 shrink-0 bg-white/5 border-l border-white/10 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-white/10 shrink-0">
         <div className="flex items-center justify-between mb-3">
@@ -360,6 +369,16 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
             setShowUploadModal(false);
           }}
         />
+      )}
+
+      {/* Sync-complete toast — bottom-right, auto-dismiss */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[60] flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-2xl shadow-black/40 animate-fade-in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 shrink-0">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          {toast}
+        </div>
       )}
     </div>
   );

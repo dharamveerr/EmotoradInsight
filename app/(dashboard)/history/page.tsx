@@ -74,7 +74,7 @@ export default function HistoryPage() {
     <div className="flex-1 flex flex-col min-h-screen">
       <Topbar title="History" subtitle="User navigation timeline with timestamps & IP addresses" />
 
-      <main className="flex-1 p-7 space-y-5">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-7 space-y-5">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
           <SelectGlass

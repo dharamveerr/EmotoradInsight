@@ -52,7 +52,7 @@ export default function ProductInsightsPage() {
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="Journey Analytics" subtitle="Detailed analytics per journey" />
       <TypewriterLoader isLoading={isLoading} messages={["Fetching journey analytics...", "Calculating conversion funnel...", "Preparing product insights...", "Hang tight..."]} />
-      <main className="flex-1 p-7 space-y-6">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-7 space-y-6">
         {/* Journey Selector */}
         <div className="flex items-center gap-4 mb-4 flex-wrap">
           <label className="text-sm font-medium text-gray-400 whitespace-nowrap">Select Journey</label>

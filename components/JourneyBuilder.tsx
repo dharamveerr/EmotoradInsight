@@ -137,7 +137,7 @@ function OptionRow({
             {selectedVars.map((v) => (
               <span
                 key={v.id}
-                className="inline-flex items-center gap-1 bg-blue-500/20 border border-blue-500/30 text-blue-200 rounded px-1.5 py-0.5 text-xs font-medium"
+                className="inline-flex items-center gap-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded px-1.5 py-0.5 text-xs font-medium"
               >
                 {v.name}
                 <button
@@ -165,7 +165,9 @@ function OptionRow({
             onKeyDown={onSearchKeyDown}
             disabled={availableVars.length === 0}
             placeholder={
-              availableVars.length === 0
+              variables.length === 0
+                ? "No variables — Sync or add"
+                : availableVars.length === 0
                 ? "All variables added"
                 : selectedVars.length === 0
                 ? "Search variable(s)…"
@@ -530,14 +532,14 @@ export default function JourneyBuilder({
 
   if (!journey) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500">
+      <div className="flex-1 min-w-[300px] flex items-center justify-center text-gray-500 text-center px-4">
         Create or select a journey to get started
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-auto bg-white/3">
+    <div className="flex-1 min-w-[320px] flex flex-col overflow-auto bg-white/3">
       {/* Header */}
       <div className="p-4 border-b border-white/10 shrink-0">
         <h3 className="text-sm font-bold text-white">{journey.name || "Untitled Journey"}</h3>

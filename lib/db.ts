@@ -248,6 +248,28 @@ async function initDb(): Promise<DB> {
       fetched_at TEXT NOT NULL,
       PRIMARY KEY (client_id, day)
     )`,
+
+    // Agent statistics — one row per (client, agent, customer) conversation,
+    // delivered by N8N from the source agent console. Replaced wholesale on each
+    // sync (it is a snapshot, not additive). Per-agent counts are aggregated in
+    // SQL for the Agent Statistics view.
+    `CREATE TABLE IF NOT EXISTS agent_stats (
+      id TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL,
+      agent_name TEXT,
+      customer_contact TEXT,
+      campaign_id TEXT,
+      is_customer_replied INTEGER DEFAULT 0,
+      customer_last_reply TEXT,
+      customer_last_reply_at TEXT,
+      is_agent_replied INTEGER DEFAULT 0,
+      agent_last_reply TEXT,
+      agent_last_reply_at TEXT,
+      is_open INTEGER DEFAULT 0,
+      source_created_at TEXT,
+      synced_at TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_agent_stats_client ON agent_stats(client_id)`,
   ];
 
   for (const stmt of ddl) {

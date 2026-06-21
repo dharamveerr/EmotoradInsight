@@ -752,7 +752,7 @@ export default function UserManagementPage() {
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="User Management" subtitle="Manage access and session history" />
 
-      <main className="flex-1 p-7 space-y-6">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-7 space-y-6">
         {/* Warning banner */}
         {warning && (
           <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm animate-fade-in">

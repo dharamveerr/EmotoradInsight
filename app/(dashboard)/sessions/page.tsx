@@ -202,10 +202,10 @@ export default function SessionsPage() {
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="Count Replay" subtitle="Individual user journey paths" />
       <TypewriterLoader isLoading={isLoading} messages={["Loading session data...", "Fetching user journeys...", "Organising session replay...", "Almost ready..."]} />
-      <main className="flex-1 p-7 space-y-5">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-7 space-y-5">
 
         {/* Controls — sticky below topbar */}
-        <div className="page-sticky-bar sticky top-16 z-10 -mx-7 px-7 py-3 mb-2 flex items-center gap-3 flex-wrap animate-fade-in">
+        <div className="page-sticky-bar sticky top-16 z-10 -mx-4 sm:-mx-6 lg:-mx-7 px-4 sm:px-6 lg:px-7 py-3 mb-2 flex items-center gap-3 flex-wrap animate-fade-in">
           {/* Outcome filter */}
           <div className="flex gap-2">
             {(["all", "completed", "dropped"] as const).map((v) => (

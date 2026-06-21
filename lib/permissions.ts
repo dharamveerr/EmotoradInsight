@@ -76,3 +76,14 @@ export async function denyIfNoReports(req: NextRequest): Promise<NextResponse | 
   if (access && canViewReports(access.role, access.permissions)) return null;
   return NextResponse.json({ error: "No report access" }, { status: 403 });
 }
+
+// API guard for a SPECIFIC report permission (e.g. agent_statistics). Use on
+// routes that should be restricted to one report group, not any report access.
+export async function denyIfNoPermission(req: NextRequest, key: PermissionKey): Promise<NextResponse | null> {
+  const role = req.headers.get("x-user-role") || "admin";
+  if (role === "super_admin") return null;
+  const identifier = req.headers.get("x-user-name") || "";
+  const access = await getUserAccess(identifier);
+  if (access && hasPermission(access.role, access.permissions, key)) return null;
+  return NextResponse.json({ error: "No access to this report" }, { status: 403 });
+}

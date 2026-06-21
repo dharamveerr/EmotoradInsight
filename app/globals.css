@@ -223,6 +223,8 @@ html.light [class~="border-white/10"] { border-color: rgba(0,0,0,0.1) !important
 html.light [class~="border-white/20"] { border-color: rgba(0,0,0,0.15) !important; }
 
 /* ── Light mode: accent text colours ── */
+html.light [class~="text-blue-100"]   { color: #1e40af !important; }
+html.light [class~="text-blue-200"]   { color: #1d4ed8 !important; }
 html.light [class~="text-blue-300"]   { color: #1d4ed8 !important; }
 html.light [class~="text-blue-400"]   { color: #2563eb !important; }
 html.light [class~="text-green-300"]  { color: #15803d !important; }
@@ -236,8 +238,19 @@ html.light [class~="text-yellow-400"] { color: #a16207 !important; }
 html.light [class~="text-amber-300"]  { color: #92400e !important; }
 html.light [class~="text-amber-400"]  { color: #78350f !important; }
 html.light [class~="text-emerald-400"]{ color: #047857 !important; }
+html.light [class~="text-emerald-300"]{ color: #047857 !important; }
+html.light [class~="text-emerald-200"]{ color: #065f46 !important; }
 html.light [class~="text-cyan-400"]   { color: #0e7490 !important; }
 html.light [class~="text-teal-400"]   { color: #0f766e !important; }
+html.light [class~="text-sky-300"]    { color: #0369a1 !important; }
+html.light [class~="text-sky-400"]    { color: #0284c7 !important; }
+html.light [class~="text-amber-200"]  { color: #92400e !important; }
+html.light [class~="text-green-200"]  { color: #15803d !important; }
+html.light [class~="text-purple-200"] { color: #6d28d9 !important; }
+html.light [class~="text-purple-500"] { color: #7c3aed !important; }
+html.light [class~="text-blue-500"]   { color: #2563eb !important; }
+html.light [class~="text-red-500"]    { color: #dc2626 !important; }
+html.light [class~="text-green-500"]  { color: #16a34a !important; }
 
 /* ── Light mode: accent bg / border cards ── */
 html.light [class~="bg-blue-500/20"]   { background-color: rgba(59,130,246,0.1) !important; }

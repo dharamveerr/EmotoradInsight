@@ -247,10 +247,10 @@ export default function Topbar({ title, subtitle }: { title: string; subtitle?: 
             )}
           </div>
 
-          {/* Sign out button */}
+          {/* Sign out button — hidden on small screens (settings menu has it) */}
           <button
             onClick={handleLogout}
-            className="text-sm text-gray-400 hover:text-red-400 font-medium transition-colors flex items-center gap-1.5"
+            className="hidden lg:flex text-sm text-gray-400 hover:text-red-400 font-medium transition-colors items-center gap-1.5"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

@@ -28,7 +28,7 @@ export default function MISReportPage() {
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="MIS Report" subtitle="Daily overview of key metrics" />
 
-      <main className="flex-1 p-7 space-y-6 overflow-auto">
+      <main className="flex-1 p-4 sm:p-6 lg:p-7 space-y-6 overflow-auto">
         {/* Journey filter */}
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-400">Select Journey</span>
@@ -49,8 +49,8 @@ export default function MISReportPage() {
           {isLoading ? (
             <div className="skeleton rounded-2xl h-96" />
           ) : (
-            <div className="glass rounded-2xl overflow-hidden animate-fade-in">
-              <table className="w-full text-sm">
+            <div className="glass rounded-2xl overflow-x-auto animate-fade-in">
+              <table className="w-full text-sm min-w-[560px]">
                 <thead className="bg-white/5 border-b border-white/10">
                   <tr>
                     <th className="text-left px-6 py-3.5 text-gray-400 font-semibold">Date</th>

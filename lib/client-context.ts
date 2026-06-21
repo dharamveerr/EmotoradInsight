@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth";
 
 export const ACTIVE_CLIENT_COOKIE = "ei_client";
 
-export type ClientRow = { id: string; name: string; slug: string | null };
+export type ClientRow = { id: string; name: string; slug: string | null; subdomain: string | null };
 export type SessionUser = { id: string; role: string; client_id: string | null };
 
 /** Resolve the logged-in user's DB row (role + client_id). */
@@ -41,7 +41,7 @@ export async function getActiveClient(): Promise<ClientRow | null> {
   if (user.role !== "super_admin") {
     if (!user.client_id) return null;
     const c = await db
-      .prepare("SELECT id, name, slug FROM clients WHERE id = ?")
+      .prepare("SELECT id, name, slug, subdomain FROM clients WHERE id = ?")
       .get<ClientRow>(user.client_id);
     return c || null;
   }
@@ -51,14 +51,14 @@ export async function getActiveClient(): Promise<ClientRow | null> {
   const picked = jar.get(ACTIVE_CLIENT_COOKIE)?.value;
   if (picked) {
     const c = await db
-      .prepare("SELECT id, name, slug FROM clients WHERE id = ?")
+      .prepare("SELECT id, name, slug, subdomain FROM clients WHERE id = ?")
       .get<ClientRow>(picked);
     if (c) return c;
   }
   // Fallback: most recently created client
   return (
     (await db
-      .prepare("SELECT id, name, slug FROM clients ORDER BY created_at ASC LIMIT 1")
+      .prepare("SELECT id, name, slug, subdomain FROM clients ORDER BY created_at ASC LIMIT 1")
       .get<ClientRow>()) || null
   );
 }

@@ -36,7 +36,7 @@ function KpiCard({ label, value, sub, icon, gradient, delay }: KpiProps) {
       <div className="flex items-start justify-between relative">
         <div>
           <p className="text-sm text-gray-400 font-medium">{label}</p>
-          <p className="text-4xl font-bold text-white mt-2 animate-count">{value}</p>
+          <p className="text-3xl sm:text-4xl font-bold text-white mt-2 animate-count">{value}</p>
           {sub && <p className="text-xs text-gray-500 mt-1.5">{sub}</p>}
         </div>
         <div className={`w-11 h-11 rounded-xl ${gradient} flex items-center justify-center text-white shadow-lg`}>
@@ -79,7 +79,7 @@ export default function OverviewPage() {
     <div className="flex-1 flex flex-col overflow-hidden">
       <Topbar title="Overview" subtitle="Real-time chatbot performance at a glance" />
       <TypewriterLoader isLoading={isLoading} messages={["Fetching chatbot metrics...", "Counting active sessions...", "Building today's overview...", "Almost ready..."]} />
-      <main className="flex-1 overflow-auto p-7 space-y-6">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-7 space-y-6">
         {/* Date Picker */}
         <div className="flex items-center gap-3 flex-wrap">
           <DateRangePicker
@@ -221,7 +221,7 @@ export default function OverviewPage() {
                 </div>
               ))
             ) : (
-              <div className="col-span-3 text-center py-10 text-gray-500">No journey data</div>
+              <div className="col-span-full text-center py-10 text-gray-500">No journey data</div>
             )}
           </div>
         </div>
