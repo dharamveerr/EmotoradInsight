@@ -6,6 +6,7 @@ type Props = {
   from: string; // YYYY-MM-DD
   to: string;   // YYYY-MM-DD
   max?: string;
+  min?: string; // earliest selectable day (inclusive); days before are disabled
   onChange: (from: string, to: string) => void;
 };
 
@@ -27,7 +28,7 @@ function compareDates(a: string, b: string) {
   return 0;
 }
 
-export default function DateRangePicker({ from, to, max, onChange }: Props) {
+export default function DateRangePicker({ from, to, max, min, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const today = max || new Date().toISOString().slice(0,10);
 
@@ -83,6 +84,7 @@ export default function DateRangePicker({ from, to, max, onChange }: Props) {
   function clickDay(day: number) {
     const ds = dateStr(viewYear, viewMonth, day);
     if (ds > today) return;
+    if (min && ds < min) return;
     if (selecting === "start") {
       setTempFrom(ds);
       setTempTo(ds);
@@ -109,7 +111,8 @@ export default function DateRangePicker({ from, to, max, onChange }: Props) {
     const end = today;
     const d = new Date(today);
     d.setDate(d.getDate() - (days - 1));
-    const start = d.toISOString().slice(0,10);
+    let start = d.toISOString().slice(0,10);
+    if (min && start < min) start = min; // keep presets inside a locked range
     onChange(start, end);
     setOpen(false);
   }
@@ -142,7 +145,8 @@ export default function DateRangePicker({ from, to, max, onChange }: Props) {
   }
 
   function isDisabled(day: number) {
-    return dateStr(viewYear, viewMonth, day) > today;
+    const ds = dateStr(viewYear, viewMonth, day);
+    return ds > today || (min ? ds < min : false);
   }
 
   const isEmpty = !from || !to;

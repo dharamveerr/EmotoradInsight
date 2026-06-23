@@ -18,14 +18,18 @@ export type MappedEvent = {
 };
 
 // Candidate source columns per target field (first non-empty wins).
+// Tuned for the real `chat_log_variable` schema: the user is identified by
+// `chat_user_mobile` (phone), the flow by `bot_template_id`, the step by
+// `chat_flow_node_id`, the time by `created_at`, and each row carries one
+// variable (`variable_name` → `variable_string_value`).
 const FIELDS = {
-  rowId:       ["id", "uuid", "row_id", "log_id"],
-  userId:      ["user_id", "phone", "phone_number", "wa_id", "contact", "contact_number", "session_id", "conversation_id"],
-  journey:     ["journey", "journey_name", "flow", "flow_name", "workflow", "workflow_name"],
-  step:        ["step", "step_name", "node", "node_name", "state", "stage"],
-  timestamp:   ["created_at", "createdAt", "timestamp", "time", "logged_at"],
+  rowId:       ["chat_log_variable_id", "chat_log_id", "id", "uuid", "row_id", "log_id"],
+  userId:      ["chat_user_mobile", "user_id", "phone", "phone_number", "wa_id", "contact", "contact_number", "facebook_user_id", "instagram_user_id", "chat_session_id", "session_id", "conversation_id"],
+  journey:     ["bot_template_id", "journey", "journey_name", "flow", "flow_name", "workflow", "workflow_name"],
+  step:        ["chat_flow_node_id", "step", "step_name", "node", "node_name", "state", "stage"],
+  timestamp:   ["created_at", "createdAt", "timestamp", "time", "logged_at", "updated_at"],
   varName:     ["variable_name", "var_name", "key", "name"],
-  varValue:    ["variable_value", "var_value", "value", "val"],
+  varValue:    ["variable_string_value", "variable_json_value", "variable_value", "var_value", "value", "val"],
   // If the source already packs all vars into one JSON column:
   variablesJson: ["variables", "metadata", "data", "payload"],
 } as const;

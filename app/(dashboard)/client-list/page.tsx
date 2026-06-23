@@ -26,6 +26,12 @@ function fmt(d: string | null) {
   return isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
 }
 
+// Sort indicator: dimmed ⇅ when inactive, ↑/↓ when this column drives the sort.
+function SortArrow({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
+  if (!active) return <span className="text-gray-600 text-xs">⇅</span>;
+  return <span className="text-green-400 text-xs">{dir === "asc" ? "↑" : "↓"}</span>;
+}
+
 function AddClientModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({ name: "", subdomain: "", org_id: "", client_id: "" });
   const [busy, setBusy] = useState(false);
@@ -101,6 +107,14 @@ export default function ClientListPage() {
   const [showAddClient, setShowAddClient] = useState(false);
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState("");
+  const [sortKey, setSortKey] = useState<"name" | "subdomain" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  // Click a sortable header: same column toggles direction, new column starts asc.
+  function toggleSort(key: "name" | "subdomain") {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  }
 
   useEffect(() => {
     if (!toast) return;
@@ -112,6 +126,15 @@ export default function ClientListPage() {
     const q = search.toLowerCase();
     return !q || c.name.toLowerCase().includes(q) || (c.subdomain || "").toLowerCase().includes(q);
   });
+
+  const sorted = sortKey
+    ? [...filtered].sort((a, b) => {
+        const av = (sortKey === "name" ? a.name : a.subdomain || "").toLowerCase();
+        const bv = (sortKey === "name" ? b.name : b.subdomain || "").toLowerCase();
+        const cmp = av.localeCompare(bv);
+        return sortDir === "asc" ? cmp : -cmp;
+      })
+    : filtered;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -147,15 +170,24 @@ export default function ClientListPage() {
           </div>
         </div>
         <div className="glass rounded-2xl overflow-x-auto">
-          <table className="w-full text-sm min-w-[860px]">
+          <table className="w-full text-sm min-w-[1000px]">
             <thead>
               <tr className="text-left text-gray-400 border-b border-white/10">
-                <th className="px-5 py-3 font-semibold">Client name</th>
-                <th className="px-5 py-3 font-semibold">Subdomain</th>
+                <th className="px-5 py-3 font-semibold">
+                  <button onClick={() => toggleSort("name")} className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer">
+                    Client name <SortArrow active={sortKey === "name"} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="px-5 py-3 font-semibold">
+                  <button onClick={() => toggleSort("subdomain")} className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer">
+                    Subdomain <SortArrow active={sortKey === "subdomain"} dir={sortDir} />
+                  </button>
+                </th>
                 <th className="px-5 py-3 font-semibold">org_id</th>
                 <th className="px-5 py-3 font-semibold">client_id</th>
                 <th className="px-5 py-3 font-semibold text-center">Trees</th>
                 <th className="px-5 py-3 font-semibold text-center">Users</th>
+                <th className="px-5 py-3 font-semibold">Created</th>
                 <th className="px-5 py-3 font-semibold">Last synced</th>
               </tr>
             </thead>
@@ -164,16 +196,16 @@ export default function ClientListPage() {
                 <>
                   {[...Array(5)].map((_, i) => (
                     <tr key={`skeleton-${i}`} className="border-b border-white/5">
-                      {[...Array(7)].map((_, j) => (
+                      {[...Array(8)].map((_, j) => (
                         <td key={`cell-${j}`} className="px-5 py-3"><div className="skeleton h-4 w-24 rounded"></div></td>
                       ))}
                     </tr>
                   ))}
                 </>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-500">{search ? "No clients match your search" : "No clients yet"}</td></tr>
+              ) : sorted.length === 0 ? (
+                <tr><td colSpan={8} className="px-5 py-10 text-center text-gray-500">{search ? "No clients match your search" : "No clients yet"}</td></tr>
               ) : (
-                filtered.map((c) => (
+                sorted.map((c) => (
                   <tr
                     key={c.id}
                     onClick={() => { setSelected(c); setEdit(false); }}
@@ -185,6 +217,7 @@ export default function ClientListPage() {
                     <td className="px-5 py-3 font-mono text-xs text-gray-400">{c.source_client_id || "—"}</td>
                     <td className="px-5 py-3 text-center text-gray-300">{c.tree_count ?? 0}</td>
                     <td className="px-5 py-3 text-center text-gray-300">{c.user_count ?? 0}</td>
+                    <td className="px-5 py-3 text-gray-400 text-xs">{fmt(c.created_at)}</td>
                     <td className="px-5 py-3 text-gray-400 text-xs">{fmt(c.last_synced_at)}</td>
                   </tr>
                 ))

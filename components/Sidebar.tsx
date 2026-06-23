@@ -95,6 +95,15 @@ const journeyChildren: NavItem[] = [
       </svg>
     ),
   },
+  {
+    href: "/variable-report",
+    label: "Variable Report",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+        <path d="M4 7h16" /><path d="M4 12h10" /><path d="M4 17h7" /><circle cx="18" cy="15" r="3" />
+      </svg>
+    ),
+  },
 ];
 
 const createTreeItem: NavItem = {

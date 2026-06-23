@@ -1,9 +1,9 @@
 {
-  "name": "Report Data Fetch (events → synchronous rows)",
+  "name": "Variable Report Fetch (chat_log_variable → synchronous rows)",
   "nodes": [
     {
       "parameters": {
-        "path": "report-fetch",
+        "path": "variable-report",
         "httpMethod": "POST",
         "responseMode": "responseNode",
         "options": {}
@@ -13,12 +13,12 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [250, 300],
-      "notes": "Copy this node's Production URL into the app env var N8N_REPORT_FETCH_URL. The app POSTs { org_id, client_id, from, to } with header x-n8n-secret and waits for the response. Response Mode MUST be 'Using Respond to Webhook Node'."
+      "notes": "Copy this node's Production URL into the app env var N8N_VARIABLE_REPORT_URL. The app POSTs { org_id, client_id, from, to } and waits for the response. Response Mode MUST be 'Using Respond to Webhook Node'."
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "-- ADJUST table/column names to your source events schema.\n-- The app maps rows tolerantly: it needs a user id, journey, step, a timestamp,\n-- and any variable columns. Returning the raw rows is fine.\nSELECT *\nFROM   chat_log_variable\nWHERE  org_id     = $1\n  AND  client_id  = $2\n  AND  created_at >= $3::date\n  AND  created_at <  ($4::date + INTERVAL '1 day')\nORDER  BY created_at ASC;",
+        "query": "-- Raw variable rows for the requested date range, straight from source.\n-- chat_flow_node_id is the step (used by the live tree's funnel/drop-off reports).\nSELECT chat_user_mobile,\n       variable_name,\n       variable_string_value,\n       bot_template_id,\n       chat_flow_node_id,\n       created_at\nFROM   chat_log_variable\nWHERE  org_id     = $1\n  AND  client_id  = $2\n  AND  variable_name IS NOT NULL\n  AND  is_deleted = false\n  AND  created_at >= $3::date\n  AND  created_at <  ($4::date + INTERVAL '1 day')\nORDER  BY created_at DESC;",
         "options": {
           "queryReplacement": "={{ $json.body.org_id }},{{ $json.body.client_id }},{{ $json.body.from }},{{ $json.body.to }}"
         }
@@ -32,7 +32,7 @@
     },
     {
       "parameters": {
-        "functionCode": "// Wrap every queried row into the { rows: [...] } shape the app expects.\n// The app's mapper (lib/n8n-mapping.ts) reads raw source columns, so pass them\n// through unchanged.\nconst rows = $input.all().map((i) => i.json);\nreturn [{ json: { rows } }];"
+        "functionCode": "// Wrap every queried row into the { rows: [...] } shape the app expects.\nconst rows = $input.all().map((i) => i.json);\nreturn [{ json: { rows } }];"
       },
       "id": "aggregate",
       "name": "Wrap as { rows }",
@@ -50,7 +50,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [1000, 300],
-      "notes": "Returns { rows: [...] } back to the app's ensureHydrated() call, which then ingests them into the events table for the matching client."
+      "notes": "Returns { rows: [...] } (chat_user_mobile, variable_name, variable_string_value, bot_template_id, created_at) to the app's Variable Report."
     }
   ],
   "connections": {
