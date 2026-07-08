@@ -7,6 +7,7 @@ import TypewriterLoader from "@/components/TypewriterLoader";
 import DateRangePicker from "@/components/DatePicker";
 import ResetButton from "@/components/ResetButton";
 import { usePersistentState } from "@/lib/usePersistentState";
+import { useActiveClientId } from "@/lib/useActiveClientId";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -14,6 +15,7 @@ const toLocalDateString = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 type Row = { mobile: string; variable: string; value: string; timestamp: string; journey: string };
+type Job = { from: string; to: string; status: "pending" | "done" | "error"; count: number; error: string | null } | null;
 
 function fmtDateTime(v: string): string {
   if (!v) return "—";
@@ -28,33 +30,81 @@ export default function VariableReportPage() {
   const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:var-report:from", defFrom);
   const [toDate, setToDate, resetTo] = usePersistentState("filter:var-report:to", today);
   const isFiltered = fromDate !== defFrom || toDate !== today;
-  function resetRange() { resetFrom(); resetTo(); }
 
-  // Manual fetch only. SWR runs solely for the committed range — set when the
-  // user clicks Fetch. Persisted, so a reload keeps showing the last fetched
-  // range/data until the user picks a new range and clicks Fetch again. (Still
-  // never auto-fetches a range the user didn't explicitly fetch.)
-  const [committed, setCommitted] = usePersistentState<{ from: string; to: string } | null>("filter:var-report:committed", null);
-  const swrKey = committed ? `/api/variable-report?from=${committed.from}&to=${committed.to}` : null;
-  const { data, isLoading, mutate, isValidating } = useSWR<{ rows?: Row[]; count?: number; error?: string }>(
+  // The range currently being viewed (per active client). Set when the user
+  // clicks Fetch. Persisted, so a reload keeps showing that range without
+  // re-running the slow N8N query — the GET just re-reads local events.
+  const clientId = useActiveClientId();
+  const [committed, setCommitted] = usePersistentState<{ from: string; to: string } | null>(
+    `filter:var-report:committed:${clientId ?? "none"}`,
+    null
+  );
+
+  // Local flag set the instant Fetch is clicked, before the first GET lands —
+  // keeps the "in progress" UI immediate.
+  const [starting, setStarting] = useState(false);
+  // True only during a manual Sync click (not during background auto-poll), so
+  // the Sync button shows "Checking…" solely when the user clicked it.
+  const [syncing, setSyncing] = useState(false);
+
+  const swrKey = clientId && committed ? `/api/variable-report?from=${committed.from}&to=${committed.to}` : null;
+  const { data, isLoading, mutate, isValidating } = useSWR<{ rows?: Row[]; count?: number; job?: Job; error?: string }>(
     swrKey,
     fetcher,
-    { revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false }
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      // Auto-poll ONLY while a fetch job is still running. Once done/idle, stop
+      // — a reload with completed data never re-syncs on its own.
+      refreshInterval: (d) => (d?.job?.status === "pending" || starting ? 3000 : 0),
+    }
   );
+
   const rows = data?.rows || [];
   const apiError = data?.error;
-  const hasFetched = committed !== null;
+  const job = data?.job || null;
+  const hasFetched = clientId != null && committed !== null;
+  const inProgress = starting || job?.status === "pending";
+
+  // Once a GET shows the job finished, clear the local starting flag.
+  if (starting && job && job.status !== "pending") {
+    setTimeout(() => setStarting(false), 0);
+  }
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const PER_PAGE = 25;
 
-  function doFetch() {
-    const next = { from: fromDate, to: toDate };
-    if (committed && committed.from === next.from && committed.to === next.to) mutate();
-    else setCommitted(next);
+  // Fetch = start a background job for the selected range, then poll.
+  async function doFetch() {
     setPage(0);
+    setCommitted({ from: fromDate, to: toDate });
+    setStarting(true);
+    try {
+      const res = await fetch("/api/variable-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: fromDate, to: toDate }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setStarting(false);
+        mutate({ rows: [], count: 0, job: { from: fromDate, to: toDate, status: "error", count: 0, error: j.error || "Failed to start fetch." } }, { revalidate: false });
+        return;
+      }
+    } catch {
+      setStarting(false);
+    }
+    mutate(); // pull events + job status
   }
+
+  // Sync = manual re-check of the running job (re-GET events + status).
+  async function doSync() {
+    setSyncing(true);
+    try { await mutate(); } finally { setSyncing(false); }
+  }
+
+  function resetRange() { resetFrom(); resetTo(); setCommitted(null); setStarting(false); setPage(0); }
 
   const q = search.trim().toLowerCase();
   const filtered = q
@@ -82,21 +132,19 @@ export default function VariableReportPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Topbar title="Variable Report" subtitle="Per-user variable values over time" />
-      <TypewriterLoader isLoading={isLoading} messages={["Fetching variables…", "Reading per-user values…", "Building the report…", "Almost ready…"]} />
+      <TypewriterLoader isLoading={isLoading && !hasFetched} messages={["Loading…", "Reading per-user values…", "Building the report…", "Almost ready…"]} />
       <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-7 space-y-5">
-        {/* Controls: date range left, fetch/export right */}
+        {/* Controls: date range left, fetch/sync/export right */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Once fetched, the picker is clamped to the fetched range — you can
-                only narrow within it. Reset unlocks back to the full range. */}
+            {/* Free date range selection — pick any window up to today. */}
             <DateRangePicker
               from={fromDate}
               to={toDate}
-              min={hasFetched ? committed!.from : undefined}
-              max={hasFetched ? committed!.to : today}
+              max={today}
               onChange={(f, t) => { setFromDate(f); setToDate(t); setPage(0); }}
             />
-            <ResetButton show={isFiltered || hasFetched} onClick={() => { resetRange(); setCommitted(null); setPage(0); }} />
+            <ResetButton show={isFiltered || hasFetched} onClick={resetRange} />
             <span className="text-xs text-gray-500">
               {hasFetched
                 ? `${committed!.from === committed!.to ? committed!.from : `${committed!.from} → ${committed!.to}`} · ${filtered.length} rows`
@@ -106,11 +154,21 @@ export default function VariableReportPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={doFetch}
-              disabled={isValidating}
+              disabled={inProgress}
               className="text-sm px-4 py-2 bg-green-500/20 text-green-300 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-colors disabled:opacity-50 cursor-pointer font-semibold"
             >
-              {isValidating ? "⏳ Fetching…" : "🔄 Fetch"}
+              {inProgress ? "⏳ Fetching…" : "🔄 Fetch"}
             </button>
+            {/* Sync appears while a fetch is running so the user can check status. */}
+            {inProgress && (
+              <button
+                onClick={doSync}
+                disabled={syncing}
+                className="text-sm px-4 py-2 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg hover:bg-amber-500/30 transition-colors disabled:opacity-50 cursor-pointer font-semibold"
+              >
+                {syncing ? "⏳ Checking…" : "⟳ Sync"}
+              </button>
+            )}
             <button
               onClick={exportCsv}
               disabled={filtered.length === 0}
@@ -121,10 +179,23 @@ export default function VariableReportPage() {
           </div>
         </div>
 
-        {/* API error banner (N8N flow unreachable / not configured) */}
-        {apiError && (
-          <div className="px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm">
-            ⚠ {apiError}
+        {/* In-progress banner */}
+        {inProgress && (
+          <div className="px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm flex items-center gap-2">
+            <span className="inline-block w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            Data fetching in progress — the source query can take a while. Rows appear here as they land. Click <b>Sync</b> to check now.
+          </div>
+        )}
+
+        {/* Success / error banner */}
+        {!inProgress && job?.status === "done" && (
+          <div className="px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-300 text-sm">
+            ✓ Fetched {job.count.toLocaleString()} variable rows for {job.from === job.to ? job.from : `${job.from} → ${job.to}`}.
+          </div>
+        )}
+        {!inProgress && (apiError || job?.status === "error") && (
+          <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm">
+            ⚠ {apiError || job?.error}
           </div>
         )}
 
@@ -148,12 +219,10 @@ export default function VariableReportPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {isLoading ? (
-                <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-500">Loading…</td></tr>
-              ) : !hasFetched ? (
+              {!hasFetched ? (
                 <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-500">Pick a date range and click <span className="text-green-400 font-semibold">Fetch</span> to load the report.</td></tr>
               ) : paged.length === 0 ? (
-                <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-500">No variable data for this range</td></tr>
+                <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-500">{inProgress ? "Fetching… rows will appear here." : "No variable data for this range"}</td></tr>
               ) : paged.map((r, i) => (
                 <tr key={`${r.mobile}-${r.variable}-${r.timestamp}-${i}`} className="hover:bg-white/5 transition-colors">
                   <td className="px-5 py-3 font-medium text-gray-200 whitespace-nowrap">{r.mobile}</td>

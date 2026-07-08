@@ -79,6 +79,13 @@ export class DB {
       await this.client.execute(stmt);
     }
   }
+
+  // Run many parameterised statements in one round trip (libsql batch). Far
+  // faster than awaiting prepare().run() per row against remote Turso.
+  async batch(stmts: { sql: string; args: InValue[] }[]): Promise<void> {
+    if (stmts.length === 0) return;
+    await this.client.batch(stmts, "write");
+  }
 }
 
 let cachedDb: DB | null = null;
@@ -270,6 +277,18 @@ async function initDb(): Promise<DB> {
       synced_at TEXT
     )`,
     `CREATE INDEX IF NOT EXISTS idx_agent_stats_client ON agent_stats(client_id)`,
+    // Tracks the latest Variable Report fetch job per client so the UI can show
+    // "fetching in progress" and let the user poll (Sync) without blocking.
+    `CREATE TABLE IF NOT EXISTS variable_sync_jobs (
+      client_id TEXT PRIMARY KEY,
+      from_date TEXT,
+      to_date TEXT,
+      status TEXT,
+      count INTEGER DEFAULT 0,
+      error TEXT,
+      started_at TEXT,
+      finished_at TEXT
+    )`,
   ];
 
   for (const stmt of ddl) {

@@ -8,6 +8,7 @@ import DateRangePicker from "@/components/DatePicker";
 import SelectGlass from "@/components/SelectGlass";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import TypewriterLoader from "@/components/TypewriterLoader";
+import DataRangeBadge, { useFetchedRange } from "@/components/DataRangeBadge";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
@@ -18,6 +19,7 @@ const toLocalDate = () => { const d = new Date(); return `${d.getFullYear()}-${S
 
 export default function JourneysPage() {
   const today = toLocalDate();
+  const fetched = useFetchedRange();
   const { labels: JOURNEY_LABELS, steps: JOURNEY_STEPS } = useJourneyConfig();
   const journeyKeys = Object.keys(JOURNEY_STEPS);
   const [selected, setSelected, resetSelected] = usePersistentState("filter:journeys:journey", "");
@@ -47,8 +49,9 @@ export default function JourneysPage() {
             onChange={setSelected}
             options={[{ value: "", label: "All Journeys" }, ...journeyKeys.map((k) => ({ value: k, label: JOURNEY_LABELS[k] || k }))]}
           />
-          <DateRangePicker from={fromDate} to={toDate} max={today} onChange={(f, t) => { setFromDate(f); setToDate(t); }} />
+          <DateRangePicker from={fromDate} to={toDate} min={fetched?.from} max={fetched?.to || today} onChange={(f, t) => { setFromDate(f); setToDate(t); }} />
           <ResetButton show={isFiltered} onClick={resetAll} />
+          <DataRangeBadge />
         </div>
 
         {isLoading ? (

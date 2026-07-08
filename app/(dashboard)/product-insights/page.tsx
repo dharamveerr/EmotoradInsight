@@ -8,6 +8,7 @@ import SelectGlass from "@/components/SelectGlass";
 import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import TypewriterLoader from "@/components/TypewriterLoader";
+import DataRangeBadge, { useFetchedRange } from "@/components/DataRangeBadge";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend,
@@ -19,6 +20,7 @@ const toLocalDate = () => { const d = new Date(); return `${d.getFullYear()}-${S
 
 export default function ProductInsightsPage() {
   const today = toLocalDate();
+  const fetched = useFetchedRange();
   const { labels: JOURNEY_LABELS, steps: JOURNEY_STEPS } = useJourneyConfig();
   const journeyKeys = Object.keys(JOURNEY_STEPS);
   const [selectedJourney, setSelectedJourney, resetJourney] = usePersistentState("filter:product-insights:journey", "");
@@ -37,16 +39,21 @@ export default function ProductInsightsPage() {
   const byDate = data?.byDate || [];
   const byHour = data?.byHour || [];
   const funnel = data?.funnel || [];
+  const kpis = data?.kpis || { uniqueUsers: 0, totalCount: 0, started: 0, completed: 0, dropped: 0 };
 
   // Days in selected range (inclusive). Falls back to days with actual data.
   const days = fromDate && toDate
     ? Math.max(1, Math.round((new Date(toDate).getTime() - new Date(fromDate).getTime()) / 86400000) + 1)
     : Math.max(1, byDate.length);
-  const avgProductViewedPerDay = Math.round((funnel[1]?.count || 0) / days);
 
-  const entries = funnel[0]?.count || 0;
-  const lastStepCount = funnel.length > 0 ? (funnel[funnel.length - 1]?.count || 0) : 0;
-  const dropoffRate = entries > 0 ? Math.round(((entries - lastStepCount) / entries) * 100) : 0;
+  // Total Entries   = unique mobile numbers (distinct users)
+  // Average Entries = total interactions / days
+  // Drop-off        = users who started but never reached the final step
+  // Conversion      = users who completed the final step
+  const totalEntries = kpis.uniqueUsers;
+  const avgPerDay = Math.round(kpis.totalCount / days);
+  const dropRate = kpis.started > 0 ? Math.round((kpis.dropped / kpis.started) * 100) : 0;
+  const convRate = kpis.started > 0 ? Math.round((kpis.completed / kpis.started) * 100) : 0;
 
   return (
     <div className="flex-1 flex flex-col overflow-auto">
@@ -61,17 +68,18 @@ export default function ProductInsightsPage() {
             onChange={setSelectedJourney}
             options={[{ value: "", label: "All Journeys" }, ...journeyKeys.map((k) => ({ value: k, label: JOURNEY_LABELS[k] || k }))]}
           />
-          <DateRangePicker from={fromDate} to={toDate} max={today} onChange={(f, t) => { setFromDate(f); setToDate(t); }} />
+          <DateRangePicker from={fromDate} to={toDate} min={fetched?.from} max={fetched?.to || today} onChange={(f, t) => { setFromDate(f); setToDate(t); }} />
           <ResetButton show={isFiltered} onClick={resetAll} />
+          <DataRangeBadge />
         </div>
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { label: "Total Entries", value: funnel[0]?.count || 0, icon: "👥" },
-            { label: "Average Entries", value: avgProductViewedPerDay, icon: "📊", sub: "avg / day" },
-            { label: "Drop-off Rate", value: `${dropoffRate}%`, icon: "📉" },
-            { label: "Conversion Rate", value: (funnel[0]?.count ?? 0) > 0 ? `${Math.round(((funnel[2]?.count ?? 0) / funnel[0].count) * 100)}%` : "0%", icon: "✅" },
+            { label: "Total Entries", value: totalEntries, icon: "👥", sub: "unique mobiles" },
+            { label: "Average Entries", value: avgPerDay, icon: "📊", sub: "avg / day" },
+            { label: "Drop-off Rate", value: kpis.dropped, icon: "📉", sub: `${dropRate}% didn't finish` },
+            { label: "Conversion Rate", value: kpis.completed, icon: "✅", sub: `${convRate}% completed` },
           ].map((kpi, i) => (
             <div key={i} className="glass rounded-2xl p-5 animate-fade-in">
               <div className="flex items-start justify-between">

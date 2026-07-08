@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { usePersistentState } from "@/lib/usePersistentState";
 import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
+import DataRangeBadge, { useFetchedRange } from "@/components/DataRangeBadge";
 import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import TypewriterLoader from "@/components/TypewriterLoader";
@@ -59,6 +60,7 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export default function OverviewPage() {
   const today = toLocalDateString();
+  const fetched = useFetchedRange();
   const { labels: JOURNEY_LABELS } = useJourneyConfig();
   const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:overview:from", today);
   const [toDate, setToDate, resetTo] = usePersistentState("filter:overview:to", today);
@@ -85,13 +87,15 @@ export default function OverviewPage() {
           <DateRangePicker
             from={fromDate}
             to={toDate}
-            max={today}
+            min={fetched?.from}
+            max={fetched?.to || today}
             onChange={(f, t) => { setFromDate(f); setToDate(t); }}
           />
           <ResetButton show={isDateFiltered} onClick={resetDateFilter} />
           <span className="text-xs text-gray-500">
             {isToday ? "Showing today's data" : isSingleDay ? `Showing data for ${fromDate}` : `${fromDate} to ${toDate}`}
           </span>
+          <DataRangeBadge />
         </div>
         {/* Top KPIs */}
         {isLoading ? (

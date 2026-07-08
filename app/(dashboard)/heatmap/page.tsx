@@ -8,6 +8,7 @@ import SelectGlass from "@/components/SelectGlass";
 import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import TypewriterLoader from "@/components/TypewriterLoader";
+import DataRangeBadge, { useFetchedRange } from "@/components/DataRangeBadge";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -24,6 +25,7 @@ const toLocalDate = () => { const d = new Date(); return `${d.getFullYear()}-${S
 
 export default function HeatmapPage() {
   const today = toLocalDate();
+  const fetched = useFetchedRange();
   const { labels: JOURNEY_LABELS, steps: JOURNEY_STEPS } = useJourneyConfig();
   const [journey, setJourney, resetJourney] = usePersistentState("filter:heatmap:journey", "");
   const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:heatmap:from", "");
@@ -67,8 +69,9 @@ export default function HeatmapPage() {
               ...Object.keys(JOURNEY_STEPS).map((k) => ({ value: k, label: JOURNEY_LABELS[k] || k })),
             ]}
           />
-          <DateRangePicker from={fromDate} to={toDate} max={today} onChange={(f, t) => { setFromDate(f); setToDate(t); }} />
+          <DateRangePicker from={fromDate} to={toDate} min={fetched?.from} max={fetched?.to || today} onChange={(f, t) => { setFromDate(f); setToDate(t); }} />
           <ResetButton show={isFiltered} onClick={resetAll} />
+          <DataRangeBadge />
         </div>
 
         {isLoading ? (

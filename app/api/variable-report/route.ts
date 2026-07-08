@@ -1,18 +1,45 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getSession } from "@/lib/auth";
 import getDb from "@/lib/db";
 import { getActiveClientId } from "@/lib/client-context";
+import { getVariableStepMap } from "@/lib/journey-config";
 import { fetchVariableReport } from "@/lib/n8n";
 import { ingestRows } from "@/lib/ingest";
 import { SourceRow } from "@/lib/n8n-mapping";
 import { denyIfNoReports } from "@/lib/permissions";
+import { startJob, finishJob, failJob, getJob } from "@/lib/variable-jobs";
 
 type ReportRow = { mobile: string; variable: string; value: string; timestamp: string; journey: string };
 
-// Variable Report: per-user variable values over time for a date range.
-// Source: a dedicated N8N flow that queries the source chat_log_variable table
-// directly (N8N_VARIABLE_REPORT_URL), sent the active client's org_id +
-// client_id + date range. N8N-only — no local fallback, so any failure surfaces.
+// Reads the Variable Report rows for a range straight from the local `events`
+// table (fast). Events are populated by the background fetch job (POST), which
+// pulls chat_log_variable via N8N and ingests it. So the display never waits on
+// the slow N8N query — it reflects whatever has been ingested so far.
+async function readRowsFromEvents(clientId: string, from: string, to: string): Promise<ReportRow[]> {
+  const db = await getDb();
+  const events = await db
+    .prepare(
+      `SELECT userId, journey, timestamp, metadata
+       FROM events
+       WHERE date(timestamp) BETWEEN ? AND ? AND client_id = ?
+       ORDER BY timestamp DESC
+       LIMIT 20000`
+    )
+    .all<{ userId: string; journey: string; timestamp: string; metadata: string | null }>(from, to, clientId);
+
+  const rows: ReportRow[] = [];
+  for (const e of events) {
+    let meta: Record<string, unknown> = {};
+    try { meta = e.metadata ? JSON.parse(e.metadata) : {}; } catch { meta = {}; }
+    for (const [k, v] of Object.entries(meta)) {
+      rows.push({ mobile: e.userId, variable: k, value: v == null ? "" : String(v), timestamp: e.timestamp, journey: e.journey });
+    }
+  }
+  return rows;
+}
+
+// ── GET: display rows (from events) + current fetch-job status ──────────────
+// Never calls N8N. Cheap enough to run on every page load / Sync click.
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -23,14 +50,35 @@ export async function GET(req: NextRequest) {
   const from = req.nextUrl.searchParams.get("from") || today;
   const to = req.nextUrl.searchParams.get("to") || from;
 
+  const clientId = await getActiveClientId();
+  if (!clientId) return NextResponse.json({ error: "No active client selected." }, { status: 400 });
+
+  const rows = await readRowsFromEvents(clientId, from, to);
+  const job = await getJob(clientId);
+  return NextResponse.json({ rows, count: rows.length, from, to, job });
+}
+
+// ── POST: start a background fetch job (N8N → remap → ingest) ───────────────
+// Returns immediately with { status: "pending" }. The heavy query + ingest run
+// after the response via Next `after`, and the job row records progress so the
+// client can poll it (GET). Idempotent: re-posting the same range is safe.
+export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const denied = await denyIfNoReports(req);
+  if (denied) return denied;
+
+  const body = (await req.json().catch(() => ({}))) as { from?: string; to?: string };
+  const today = new Date().toISOString().slice(0, 10);
+  const from = body.from || today;
+  const to = body.to || from;
+
   if (!process.env.N8N_VARIABLE_REPORT_URL) {
     return NextResponse.json({ error: "Variable report sync is not configured (N8N_VARIABLE_REPORT_URL)." }, { status: 503 });
   }
 
   const clientId = await getActiveClientId();
-  if (!clientId) {
-    return NextResponse.json({ error: "No active client selected." }, { status: 400 });
-  }
+  if (!clientId) return NextResponse.json({ error: "No active client selected." }, { status: 400 });
 
   const db = await getDb();
   const client = await db
@@ -40,36 +88,30 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Active client has no org_id / client_id. Add them to enable the report." }, { status: 400 });
   }
 
-  const raw = await fetchVariableReport(client.org_id, client.source_client_id, from, to);
-  if (raw === null) {
-    // N8N unreachable / inactive / errored — surface it instead of hiding behind
-    // stale local data. Most common cause: the workflow isn't activated.
-    return NextResponse.json(
-      { error: "Could not reach the N8N variable-report flow. Make sure the workflow is imported and Active." },
-      { status: 502 }
-    );
-  }
+  await startJob(clientId, from, to);
+  const orgId = client.org_id, srcClientId = client.source_client_id;
 
-  // Feed the same rows into the events table so the live (published) tree's
-  // reports — Overview, Funnels, Heatmap, Drop-off, MIS — populate from the
-  // variable-report data. Idempotent upsert, so refetching the same range is safe.
-  let ingested = 0;
-  try {
-    const res = await ingestRows(clientId, raw as unknown as SourceRow[]);
-    ingested = res.written;
-  } catch (e) {
-    console.error("variable-report ingest failed:", e);
-  }
+  after(async () => {
+    try {
+      const raw = await fetchVariableReport(orgId, srcClientId, from, to);
+      if (raw === null) {
+        await failJob(clientId, "Could not reach the N8N variable-report flow. Make sure the workflow is Active.");
+        return;
+      }
+      // Relabel journey/step from source UUIDs to the tree's journey/step names
+      // (matched by the variable each row carries) so reports line up.
+      const varMap = await getVariableStepMap(clientId);
+      const remapped: SourceRow[] = (raw as unknown as SourceRow[]).map((r) => {
+        const m = varMap[String((r as Record<string, unknown>).variable_name ?? "")];
+        if (!m) return r;
+        return { ...r, bot_template_id: m.journey, chat_flow_node_id: m.step };
+      });
+      await ingestRows(clientId, remapped);
+      await finishJob(clientId, raw.length);
+    } catch (e) {
+      await failJob(clientId, e instanceof Error ? e.message : String(e));
+    }
+  });
 
-  const rows: ReportRow[] = raw
-    .filter((r) => r.variable_name)
-    .map((r) => ({
-      mobile: String(r.chat_user_mobile ?? ""),
-      variable: String(r.variable_name ?? ""),
-      value: r.variable_string_value == null ? "" : String(r.variable_string_value),
-      timestamp: r.created_at ? new Date(r.created_at).toISOString() : "",
-      journey: String(r.bot_template_id ?? ""),
-    }));
-
-  return NextResponse.json({ rows, count: rows.length, from, to, source: "n8n", ingested });
+  return NextResponse.json({ status: "pending", from, to });
 }

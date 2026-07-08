@@ -89,3 +89,48 @@ export async function getJourneyConfig(): Promise<JourneyConfig> {
 
   return { labels, steps, tree };
 }
+
+/**
+ * Maps each variable name captured in a client's published tree to the
+ * (journeyKey, stepName) that owns it. This is the bridge between raw ingested
+ * data — whose journey/step are source UUIDs (bot_template_id / node_id) — and
+ * the tree's friendly journey/step names: an ingested row carrying `@intake`
+ * belongs to whichever step declares `@intake`. Ingest uses this to relabel
+ * rows so every report lines up with the published tree. Empty when no tree.
+ */
+export async function getVariableStepMap(
+  clientId: string
+): Promise<Record<string, { journey: string; step: string }>> {
+  const db = await getDb();
+  const tree = await db
+    .prepare("SELECT id FROM trees WHERE status = 'published' AND client_id = ? LIMIT 1")
+    .get<{ id: string }>(clientId);
+  if (!tree) return {};
+
+  const journeys = await db
+    .prepare("SELECT name, structure FROM journeys WHERE tree_id = ? ORDER BY created_at ASC")
+    .all<{ name: string; structure: string }>(tree.id);
+
+  const map: Record<string, { journey: string; step: string }> = {};
+  for (const j of journeys) {
+    const key = journeyKeyFromName(j.name);
+    let parsed: { steps?: JourneyStep[] } = {};
+    try { parsed = JSON.parse(j.structure); } catch { /* skip malformed */ }
+    const walk = (list: JourneyStep[]) => {
+      for (const s of list) {
+        const stepName = s.name?.trim();
+        if (stepName) {
+          for (const o of s.options || []) {
+            const vars = [o.storesInVariable, ...(o.storesInVariables || [])];
+            for (const v of vars) {
+              if (v && !map[v]) map[v] = { journey: key, step: stepName };
+            }
+          }
+        }
+        if (s.children?.length) walk(s.children);
+      }
+    };
+    walk(parsed.steps || []);
+  }
+  return map;
+}

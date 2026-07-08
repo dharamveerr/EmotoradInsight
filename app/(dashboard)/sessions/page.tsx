@@ -8,6 +8,7 @@ import Topbar from "@/components/Topbar";
 import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import TypewriterLoader from "@/components/TypewriterLoader";
+import DataRangeBadge, { useFetchedRange } from "@/components/DataRangeBadge";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -134,6 +135,7 @@ const toLocalDate = () => { const d = new Date(); return `${d.getFullYear()}-${S
 
 export default function SessionsPage() {
   const today = toLocalDate();
+  const fetched = useFetchedRange();
   const { labels: JOURNEY_LABELS } = useJourneyConfig();
   const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:sessions:from", "");
   const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:sessions:to",   "");
@@ -199,13 +201,16 @@ export default function SessionsPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-auto">
+    <div className="flex-1 flex flex-col overflow-hidden">
       <Topbar title="Count Replay" subtitle="Individual user journey paths" />
       <TypewriterLoader isLoading={isLoading} messages={["Loading session data...", "Fetching user journeys...", "Organising session replay...", "Almost ready..."]} />
-      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-7 space-y-5">
+      {/* No top padding on main: sticky offsets are inset by the scroll
+          container's padding, so any pt would push the pinned bar down and let
+          rows peek above it. The bar's own py provides the top spacing. */}
+      <main className="flex-1 overflow-auto px-4 sm:px-6 lg:px-7 pb-4 sm:pb-6 lg:pb-7 space-y-5">
 
-        {/* Controls — sticky below topbar */}
-        <div className="page-sticky-bar sticky top-16 z-10 -mx-4 sm:-mx-6 lg:-mx-7 px-4 sm:px-6 lg:px-7 py-3 mb-2 flex items-center gap-3 flex-wrap animate-fade-in">
+        {/* Controls — pinned to the top of main's scroll container */}
+        <div className="page-sticky-bar sticky top-0 z-10 -mx-4 sm:-mx-6 lg:-mx-7 px-4 sm:px-6 lg:px-7 py-3 mb-2 flex items-center gap-3 flex-wrap animate-fade-in">
           {/* Outcome filter */}
           <div className="flex gap-2">
             {(["all", "completed", "dropped"] as const).map((v) => (
@@ -244,11 +249,13 @@ export default function SessionsPage() {
             className="glass rounded-xl px-4 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/40 w-64"
           />
 
-          <DateRangePicker from={fromDate} to={toDate} max={today} onChange={(f, t) => { setFromDate(f); setToDate(t); }} />
+          <DateRangePicker from={fromDate} to={toDate} min={fetched?.from} max={fetched?.to || today} onChange={(f, t) => { setFromDate(f); setToDate(t); }} />
 
           <span className="text-xs text-gray-500">{filtered.length} count</span>
 
           <ResetButton show={isFiltered} onClick={resetAll} />
+
+          <DataRangeBadge />
 
           {/* Download */}
           <div className="ml-auto flex gap-2">

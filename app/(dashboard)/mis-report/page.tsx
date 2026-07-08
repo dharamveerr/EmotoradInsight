@@ -5,6 +5,7 @@ import useSWR from "swr";
 import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
+import DataRangeBadge from "@/components/DataRangeBadge";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -30,7 +31,7 @@ export default function MISReportPage() {
 
       <main className="flex-1 p-4 sm:p-6 lg:p-7 space-y-6 overflow-auto">
         {/* Journey filter */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <span className="text-sm text-gray-400">Select Journey</span>
           <SelectGlass
             value={journey}
@@ -40,6 +41,7 @@ export default function MISReportPage() {
               ...Object.entries(JOURNEY_LABELS).map(([key, label]) => ({ value: key, label })),
             ]}
           />
+          <DataRangeBadge />
         </div>
 
         {/* Daily Overview Report Table */}

@@ -19,24 +19,27 @@ export async function ingestRows(clientId: string, rows: SourceRow[]): Promise<I
   const db = await getDb();
   const { events, skipped } = mapRows(rows);
 
-  let written = 0;
+  const SQL =
+    `INSERT INTO events (id, userId, journey, step, timestamp, metadata, client_id, source_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(source_id) WHERE source_id IS NOT NULL DO UPDATE SET
+       metadata = excluded.metadata,
+       timestamp = excluded.timestamp`;
+
+  // Bulk upsert in batches — one round trip per chunk instead of per row.
   let maxCreatedAt = "";
-  for (const e of events) {
-    const res = await db
-      .prepare(
-        `INSERT INTO events (id, userId, journey, step, timestamp, metadata, client_id, source_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(source_id) WHERE source_id IS NOT NULL DO UPDATE SET
-           metadata = excluded.metadata,
-           timestamp = excluded.timestamp`
-      )
-      .run(
-        uuidv4(), e.userId, e.journey, e.step, e.timestamp,
-        JSON.stringify(e.metadata), clientId, e.sourceId
-      );
-    written += res.changes;
-    if (e.timestamp > maxCreatedAt) maxCreatedAt = e.timestamp;
+  const CHUNK = 500;
+  for (let i = 0; i < events.length; i += CHUNK) {
+    const slice = events.slice(i, i + CHUNK);
+    await db.batch(
+      slice.map((e) => ({
+        sql: SQL,
+        args: [uuidv4(), e.userId, e.journey, e.step, e.timestamp, JSON.stringify(e.metadata), clientId, e.sourceId],
+      }))
+    );
+    for (const e of slice) if (e.timestamp > maxCreatedAt) maxCreatedAt = e.timestamp;
   }
+  const written = events.length;
 
   if (maxCreatedAt) {
     await db

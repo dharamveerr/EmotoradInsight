@@ -226,7 +226,37 @@ export async function GET(req: NextRequest) {
     });
     const priceDistribution = Object.entries(priceCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 
-    return NextResponse.json({ funnel, byDate, byHour, productDistribution, priceDistribution });
+    // ── KPI metrics ─────────────────────────────────────────────────────
+    // uniqueUsers  = distinct mobile numbers (userId) across the journey(s)
+    // totalCount   = total interactions (event rows) — basis for avg/day
+    // started      = distinct users who hit each journey's FIRST step
+    // completed    = distinct users who hit each journey's LAST step
+    // dropped      = started − completed (began but never finished)
+    const uniqRow = allJourneys
+      ? (await db.prepare(`SELECT COUNT(DISTINCT userId) c FROM events WHERE 1=1 ${dc}${cf}${js}`).get<{ c: number }>(...dp, ...cp, ...jp))!
+      : (await db.prepare(`SELECT COUNT(DISTINCT userId) c FROM events WHERE journey = ? ${dc}${cf}`).get<{ c: number }>(targetJourney, ...dp, ...cp))!;
+    const uniqueUsers = Number(uniqRow.c);
+
+    const totRow = allJourneys
+      ? (await db.prepare(`SELECT COUNT(*) c FROM events WHERE 1=1 ${dc}${cf}${js}`).get<{ c: number }>(...dp, ...cp, ...jp))!
+      : (await db.prepare(`SELECT COUNT(*) c FROM events WHERE journey = ? ${dc}${cf}`).get<{ c: number }>(targetJourney, ...dp, ...cp))!;
+    const totalCount = Number(totRow.c);
+
+    let started = 0, completed = 0;
+    const kpiKeys = allJourneys ? Object.keys(JOURNEY_STEPS) : [targetJourney];
+    for (const j of kpiKeys) {
+      const steps = JOURNEY_STEPS[j] || [];
+      if (steps.length === 0) continue;
+      const first = steps[0], last = steps[steps.length - 1];
+      const s = (await db.prepare(`SELECT COUNT(DISTINCT userId) c FROM events WHERE journey = ? AND step = ? ${dc}${cf}`).get<{ c: number }>(j, first, ...dp, ...cp))!;
+      const c = (await db.prepare(`SELECT COUNT(DISTINCT userId) c FROM events WHERE journey = ? AND step = ? ${dc}${cf}`).get<{ c: number }>(j, last, ...dp, ...cp))!;
+      started += Number(s.c);
+      completed += Number(c.c);
+    }
+    const dropped = Math.max(0, started - completed);
+    const kpis = { uniqueUsers, totalCount, started, completed, dropped };
+
+    return NextResponse.json({ funnel, byDate, byHour, productDistribution, priceDistribution, kpis });
   }
 
   return NextResponse.json({ error: "Unknown type" }, { status: 400 });
