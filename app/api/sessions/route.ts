@@ -37,17 +37,28 @@ export async function GET(req: NextRequest) {
       .prepare(`SELECT step, timestamp, metadata FROM events WHERE userId = ? AND journey = ?${cf} ORDER BY timestamp ASC`)
       .all<{ step: string; timestamp: string; metadata: string | null }>(userId, journey, ...cp);
 
-    const steps = events.map((e) => {
+    // Collapse repeated events for the same step into a single step, merging all
+    // their variables. Keeps first-seen order and the earliest timestamp so the
+    // detail shows each step once with every variable captured in it.
+    const byStep = new Map<string, { step: string; timestamp: string; variables: Record<string, string> }>();
+    for (const e of events) {
       let meta: Record<string, string> = {};
       try { meta = e.metadata ? JSON.parse(e.metadata) : {}; } catch {}
-      return { step: e.step, timestamp: e.timestamp, variables: meta };
-    });
+      const existing = byStep.get(e.step);
+      if (existing) {
+        Object.assign(existing.variables, meta);
+        if (e.timestamp < existing.timestamp) existing.timestamp = e.timestamp;
+      } else {
+        byStep.set(e.step, { step: e.step, timestamp: e.timestamp, variables: { ...meta } });
+      }
+    }
+    const steps = [...byStep.values()];
 
     return NextResponse.json({ steps });
   }
 
   // ── Session list ───────────────────────────────────────────────────
-  const dateClause = from && to ? "date(e.timestamp) BETWEEN ? AND ?" : "";
+  const dateClause = from && to ? "(e.timestamp)::date BETWEEN ?::date AND ?::date" : "";
   const parts = [dateClause, clientId ? "e.client_id = ?" : ""].filter(Boolean);
   const listWhere = parts.length ? "WHERE " + parts.join(" AND ") : "";
   const listParams: string[] = [...(from && to ? [from, to] : []), ...cp];
@@ -55,17 +66,17 @@ export async function GET(req: NextRequest) {
   const rows = await db
     .prepare(`
       SELECT
-        userId, journey,
-        MIN(timestamp) as startTime,
-        COUNT(*) as stepCount,
-        MAX(step) as lastStep,
+        userId AS "userId", journey,
+        MIN(timestamp) AS "startTime",
+        COUNT(*) AS "stepCount",
+        MAX(step) AS "lastStep",
         (SELECT metadata FROM events e2
          WHERE e2.userId = e.userId AND e2.journey = e.journey
-         ORDER BY e2.timestamp ASC LIMIT 1) as firstMeta
+         ORDER BY e2.timestamp ASC LIMIT 1) AS "firstMeta"
       FROM events e
       ${listWhere}
       GROUP BY userId, journey
-      ORDER BY startTime DESC
+      ORDER BY MIN(timestamp) DESC
       LIMIT 2000
     `)
     .all<{
@@ -97,7 +108,7 @@ export async function GET(req: NextRequest) {
     // Flatten: one row per event with all metadata keys
     const allEvents = await db
       .prepare(`
-        SELECT userId, journey, step, timestamp, metadata
+        SELECT userId AS "userId", journey, step, timestamp, metadata
         FROM events
         ${clientId ? "WHERE client_id = ?" : ""}
         ORDER BY userId, journey, timestamp ASC

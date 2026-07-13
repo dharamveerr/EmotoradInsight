@@ -19,9 +19,9 @@ async function readRowsFromEvents(clientId: string, from: string, to: string): P
   const db = await getDb();
   const events = await db
     .prepare(
-      `SELECT userId, journey, timestamp, metadata
+      `SELECT userId AS "userId", journey, timestamp, metadata
        FROM events
-       WHERE date(timestamp) BETWEEN ? AND ? AND client_id = ?
+       WHERE (timestamp)::date BETWEEN ?::date AND ?::date AND client_id = ?
        ORDER BY timestamp DESC
        LIMIT 20000`
     )

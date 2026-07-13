@@ -40,7 +40,7 @@ export async function POST(
   }
 
   // One published tree per client: draft any other live tree of this client
-  await db.prepare("UPDATE trees SET status = 'draft', published_at = NULL WHERE status = 'published' AND client_id IS ?").run(tree.client_id);
+  await db.prepare("UPDATE trees SET status = 'draft', published_at = NULL WHERE status = 'published' AND client_id IS NOT DISTINCT FROM ?").run(tree.client_id);
   await db.prepare(
     "UPDATE trees SET status = 'published', published_at = ?, updated_at = ? WHERE id = ?"
   ).run(now, now, id);

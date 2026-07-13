@@ -9,7 +9,7 @@ import { denyIfNoReports } from "@/lib/permissions";
 // Helper: returns SQL clause + params for optional date range filtering
 function df(from: string, to: string) {
   return from && to
-    ? { clause: "AND date(timestamp) BETWEEN ? AND ?", p: [from, to] as string[] }
+    ? { clause: "AND (timestamp)::date BETWEEN ?::date AND ?::date", p: [from, to] as string[] }
     : { clause: "", p: [] as string[] };
 }
 
@@ -52,18 +52,18 @@ export async function GET(req: NextRequest) {
     const dateTo   = to   || today;
 
     const todaySessions = (await db
-      .prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf}${js}`)
+      .prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE (timestamp)::date BETWEEN ?::date AND ?::date${cf}${js}`)
       .get<{ c: number }>(dateFrom, dateTo, ...cp, ...jp))!;
 
     const activeJourneys = (await db
-      .prepare(`SELECT COUNT(DISTINCT journey) as c FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf}${js}`)
+      .prepare(`SELECT COUNT(DISTINCT journey) as c FROM events WHERE (timestamp)::date BETWEEN ?::date AND ?::date${cf}${js}`)
       .get<{ c: number }>(dateFrom, dateTo, ...cp, ...jp))!;
 
     const journeyCompletions = await Promise.all(
       Object.entries(JOURNEY_STEPS).map(async ([j, steps]) => {
         const lastStep = steps[steps.length - 1];
-        const total     = (await db.prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE journey = ? AND date(timestamp) BETWEEN ? AND ?${cf}`).get<{ c: number }>(j, dateFrom, dateTo, ...cp))!;
-        const completed = (await db.prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE journey = ? AND step = ? AND date(timestamp) BETWEEN ? AND ?${cf}`).get<{ c: number }>(j, lastStep, dateFrom, dateTo, ...cp))!;
+        const total     = (await db.prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE journey = ? AND (timestamp)::date BETWEEN ?::date AND ?::date${cf}`).get<{ c: number }>(j, dateFrom, dateTo, ...cp))!;
+        const completed = (await db.prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE journey = ? AND step = ? AND (timestamp)::date BETWEEN ?::date AND ?::date${cf}`).get<{ c: number }>(j, lastStep, dateFrom, dateTo, ...cp))!;
         return { total: Number(total.c), completed: Number(completed.c) };
       })
     );
@@ -72,18 +72,18 @@ export async function GET(req: NextRequest) {
     const completionRate = totalUsers > 0 ? Math.round((totalCompleted / totalUsers) * 100) : 0;
 
     const last7Days = await db
-      .prepare(`SELECT date(timestamp) as date, COUNT(DISTINCT userId || journey) as count FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf}${js} GROUP BY date(timestamp) ORDER BY date`)
+      .prepare(`SELECT (timestamp)::date as date, COUNT(DISTINCT userId || journey) as count FROM events WHERE (timestamp)::date BETWEEN ?::date AND ?::date${cf}${js} GROUP BY (timestamp)::date ORDER BY date`)
       .all<{ date: string; count: number }>(dateFrom, dateTo, ...cp, ...jp);
 
     const journeyDist = await db
-      .prepare(`SELECT journey, COUNT(DISTINCT userId) as count FROM events WHERE date(timestamp) BETWEEN ? AND ?${cf}${js} GROUP BY journey ORDER BY count DESC`)
+      .prepare(`SELECT journey, COUNT(DISTINCT userId) as count FROM events WHERE (timestamp)::date BETWEEN ?::date AND ?::date${cf}${js} GROUP BY journey ORDER BY count DESC`)
       .all<{ journey: string; count: number }>(dateFrom, dateTo, ...cp, ...jp);
 
     const journeyBreakdown = await Promise.all(
       Object.entries(JOURNEY_STEPS).map(async ([j, steps]) => {
         const lastStep  = steps[steps.length - 1];
-        const entries   = (await db.prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE journey = ? AND step = ? AND date(timestamp) BETWEEN ? AND ?${cf}`).get<{ c: number }>(j, steps[0], dateFrom, dateTo, ...cp))!;
-        const completed = (await db.prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE journey = ? AND step = ? AND date(timestamp) BETWEEN ? AND ?${cf}`).get<{ c: number }>(j, lastStep, dateFrom, dateTo, ...cp))!;
+        const entries   = (await db.prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE journey = ? AND step = ? AND (timestamp)::date BETWEEN ?::date AND ?::date${cf}`).get<{ c: number }>(j, steps[0], dateFrom, dateTo, ...cp))!;
+        const completed = (await db.prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE journey = ? AND step = ? AND (timestamp)::date BETWEEN ?::date AND ?::date${cf}`).get<{ c: number }>(j, lastStep, dateFrom, dateTo, ...cp))!;
         const entriesC = Number(entries.c);
         const completedC = Number(completed.c);
         const conversionRate = entriesC > 0 ? Math.round((completedC / entriesC) * 100) : 0;
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
     const params: (string | number)[] = [];
     if (journey) { whereParts.push("journey = ?"); params.push(journey); }
     else if (journeyKeys.length) { whereParts.push(`journey IN (${journeyKeys.map(() => "?").join(",")})`); params.push(...journeyKeys); }
-    if (from && to) { whereParts.push("date(timestamp) BETWEEN ? AND ?"); params.push(from, to); }
+    if (from && to) { whereParts.push("(timestamp)::date BETWEEN ?::date AND ?::date"); params.push(from, to); }
     if (clientId) { whereParts.push("client_id = ?"); params.push(clientId); }
     const where = whereParts.length ? "WHERE " + whereParts.join(" AND ") : "";
 
@@ -192,8 +192,8 @@ export async function GET(req: NextRequest) {
 
     // By date
     const byDate = allJourneys
-      ? await db.prepare(`SELECT DATE(timestamp) as date, COUNT(DISTINCT userId) as count FROM events WHERE 1=1 ${dc}${cf} GROUP BY DATE(timestamp) ORDER BY date`).all<{ date: string; count: number }>(...dp, ...cp)
-      : await db.prepare(`SELECT DATE(timestamp) as date, COUNT(DISTINCT userId) as count FROM events WHERE journey = ? ${dc}${cf} GROUP BY DATE(timestamp) ORDER BY date`).all<{ date: string; count: number }>(targetJourney, ...dp, ...cp);
+      ? await db.prepare(`SELECT (timestamp)::date as date, COUNT(DISTINCT userId) as count FROM events WHERE 1=1 ${dc}${cf} GROUP BY (timestamp)::date ORDER BY date`).all<{ date: string; count: number }>(...dp, ...cp)
+      : await db.prepare(`SELECT (timestamp)::date as date, COUNT(DISTINCT userId) as count FROM events WHERE journey = ? ${dc}${cf} GROUP BY (timestamp)::date ORDER BY date`).all<{ date: string; count: number }>(targetJourney, ...dp, ...cp);
 
     // By hour
     const byHour = allJourneys

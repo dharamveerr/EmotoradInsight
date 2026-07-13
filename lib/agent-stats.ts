@@ -99,8 +99,8 @@ export type DateRange = { from?: string | null; to?: string | null };
 function scopeClause(clientId: string, range?: DateRange): { where: string; params: (string)[] } {
   const params: string[] = [clientId];
   let where = "client_id = ?";
-  if (range?.from) { where += " AND date(source_created_at) >= date(?)"; params.push(range.from); }
-  if (range?.to) { where += " AND date(source_created_at) <= date(?)"; params.push(range.to); }
+  if (range?.from) { where += " AND (source_created_at)::date >= (?)::date"; params.push(range.from); }
+  if (range?.to) { where += " AND (source_created_at)::date <= (?)::date"; params.push(range.to); }
   return { where, params };
 }
 

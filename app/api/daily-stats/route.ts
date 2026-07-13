@@ -46,14 +46,14 @@ export async function GET(req: NextRequest) {
   const rows = await db
     .prepare(`
       SELECT
-        DATE(timestamp) as date,
-        userId,
+        (timestamp)::date as date,
+        userId AS "userId",
         journey,
-        MAX(step) as lastStep,
-        COUNT(*) as stepCount
+        MAX(step) AS "lastStep",
+        COUNT(*) AS "stepCount"
       FROM events
       ${where}
-      GROUP BY DATE(timestamp), userId, journey
+      GROUP BY (timestamp)::date, userId, journey
       ORDER BY date DESC
     `)
     .all<{ date: string; userId: string; journey: string; lastStep: string; stepCount: number }>(...params);
