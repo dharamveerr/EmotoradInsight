@@ -202,6 +202,17 @@ html.light .glass {
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
+/* Sticky report-table header: stays pinned while the page scrolls. Needs an
+   opaque background so body rows don't show through. Matches the .glass card
+   surface in each theme (dark by default, white in light mode). */
+.report-th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #0b1524;
+}
+html.light .report-th { background: #ffffff; }
+
 html.light .skeleton {
   background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
   background-size: 1000px 100%;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import Topbar from "@/components/Topbar";
 import TypewriterLoader from "@/components/TypewriterLoader";
@@ -16,13 +16,7 @@ const toLocalDateString = (d = new Date()) =>
 
 type Row = { mobile: string; variable: string; value: string; timestamp: string; journey: string };
 type Job = { from: string; to: string; status: "pending" | "done" | "error"; count: number; error: string | null } | null;
-
-function fmtDateTime(v: string): string {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-}
+type PivotRow = { mobile: string; vars: Record<string, string> };
 
 export default function VariableReportPage() {
   const today = toLocalDateString();
@@ -48,7 +42,7 @@ export default function VariableReportPage() {
   const [syncing, setSyncing] = useState(false);
 
   const swrKey = clientId && committed ? `/api/variable-report?from=${committed.from}&to=${committed.to}` : null;
-  const { data, isLoading, mutate, isValidating } = useSWR<{ rows?: Row[]; count?: number; job?: Job; error?: string }>(
+  const { data, isLoading, mutate } = useSWR<{ rows?: Row[]; count?: number; job?: Job; error?: string }>(
     swrKey,
     fetcher,
     {
@@ -60,7 +54,7 @@ export default function VariableReportPage() {
     }
   );
 
-  const rows = data?.rows || [];
+  const rows = useMemo(() => data?.rows || [], [data]);
   const apiError = data?.error;
   const job = data?.job || null;
   const hasFetched = clientId != null && committed !== null;
@@ -72,6 +66,9 @@ export default function VariableReportPage() {
   }
 
   const [search, setSearch] = useState("");
+  // Variable column filter. null = show all (default); an array = show exactly
+  // those variables ([] = show none).
+  const [pickedVars, setPickedVars] = useState<string[] | null>(null);
   const [page, setPage] = useState(0);
   const PER_PAGE = 25;
 
@@ -107,24 +104,64 @@ export default function VariableReportPage() {
   function resetRange() { resetFrom(); resetTo(); setCommitted(null); setStarting(false); setPage(0); }
 
   const q = search.trim().toLowerCase();
-  const filtered = q
-    ? rows.filter((r) => [r.mobile, r.variable, r.value].some((f) => (f || "").toLowerCase().includes(q)))
-    : rows;
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+
+  // ── Pivot view (one row per mobile, one column per variable) ─────────
+  // Collapse the long rows into a matrix: for each (mobile, variable) keep the
+  // latest value by timestamp. Columns = sorted union of all variable names.
+  const { variables, pivotRows } = useMemo(() => {
+    const varSet = new Set<string>();
+    const byMobile = new Map<string, Record<string, string>>();
+    const latestTs = new Map<string, string>(); // `${mobile}|${variable}` → ts
+    for (const r of rows) {
+      if (!r.variable) continue;
+      varSet.add(r.variable);
+      const key = `${r.mobile}|${r.variable}`;
+      const prev = latestTs.get(key);
+      if (!prev || r.timestamp > prev) {
+        latestTs.set(key, r.timestamp);
+        let m = byMobile.get(r.mobile);
+        if (!m) { m = {}; byMobile.set(r.mobile, m); }
+        m[r.variable] = r.value;
+      }
+    }
+    // Column + row ordering match the canonical source export exactly:
+    //  - variables sorted case-insensitively (lowercase codepoint compare)
+    //  - phone rows sorted descending as strings
+    const lc = (a: string, b: string) => {
+      const la = a.toLowerCase(), lb = b.toLowerCase();
+      return la < lb ? -1 : la > lb ? 1 : 0;
+    };
+    return {
+      variables: [...varSet].sort(lc),
+      pivotRows: ([...byMobile.entries()].map(([mobile, vars]) => ({ mobile, vars })) as PivotRow[])
+        .sort((a, b) => (a.mobile < b.mobile ? 1 : a.mobile > b.mobile ? -1 : 0)),
+    };
+  }, [rows]);
+
+  const pivotFiltered = q
+    ? pivotRows.filter((pr) =>
+        pr.mobile.toLowerCase().includes(q) ||
+        Object.entries(pr.vars).some(([k, v]) => k.toLowerCase().includes(q) || (v || "").toLowerCase().includes(q))
+      )
+    : pivotRows;
+
+  // Apply the variable column filter. null = show every variable.
+  const effVariables = pickedVars === null ? variables : variables.filter((v) => pickedVars.includes(v));
+
+  const activeCount = pivotFiltered.length;
+  const pageCount = Math.max(1, Math.ceil(activeCount / PER_PAGE));
   const safePage = Math.min(page, pageCount - 1);
-  const paged = filtered.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE);
+  const pagedPivot = pivotFiltered.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE);
 
   function exportCsv() {
-    const head = ["Mobile", "Variable", "Value", "Timestamp", "Journey"];
-    const esc = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
-    const lines = [head.join(",")].concat(
-      filtered.map((r) => [r.mobile, r.variable, r.value, r.timestamp, r.journey].map(esc).join(","))
-    );
-    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const esc = (s: string) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+    const head = ["Phone Number", ...effVariables];
+    const body = pivotFiltered.map((pr) => [pr.mobile, ...effVariables.map((v) => pr.vars[v] ?? "")].map(esc).join(","));
+    const blob = new Blob([[head.join(","), ...body].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `variable-report_${fromDate}_to_${toDate}.csv`;
+    a.download = `variable-report-pivot_${fromDate}_to_${toDate}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -147,7 +184,7 @@ export default function VariableReportPage() {
             <ResetButton show={isFiltered || hasFetched} onClick={resetRange} />
             <span className="text-xs text-gray-500">
               {hasFetched
-                ? `${committed!.from === committed!.to ? committed!.from : `${committed!.from} → ${committed!.to}`} · ${filtered.length} rows`
+                ? `${committed!.from === committed!.to ? committed!.from : `${committed!.from} → ${committed!.to}`} · ${activeCount} users`
                 : "Pick a range, then click Fetch"}
             </span>
           </div>
@@ -171,7 +208,7 @@ export default function VariableReportPage() {
             )}
             <button
               onClick={exportCsv}
-              disabled={filtered.length === 0}
+              disabled={activeCount === 0}
               className="text-sm px-4 py-2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-colors disabled:opacity-40 cursor-pointer font-semibold"
             >
               ⤓ Export CSV
@@ -199,36 +236,45 @@ export default function VariableReportPage() {
           </div>
         )}
 
-        {/* Search */}
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-          placeholder="Search mobile, variable, or value…"
-          className="w-full sm:w-96 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-green-500/40"
-        />
+        {/* Variable filter + search */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <VariableFilter
+            variables={variables}
+            picked={pickedVars}
+            onChange={(p) => { setPickedVars(p); setPage(0); }}
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            placeholder="Search mobile, variable, or value…"
+            className="flex-1 min-w-[220px] max-w-md bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-green-500/40"
+          />
+        </div>
 
-        {/* Table */}
-        <div className="glass rounded-2xl overflow-x-auto">
-          <table className="w-full text-sm min-w-[760px]">
-            <thead className="bg-white/5 border-b border-white/10">
+        {/* Table — scrolls inside the card (both axes) so the header can stay
+            pinned to the card top while rows scroll under it. */}
+        <div className="glass rounded-2xl overflow-auto max-h-[70vh]">
+          <table className="text-sm">
+            <thead className="border-b border-white/10">
               <tr>
-                {["Mobile Number", "Variable", "Value", "Timestamp"].map((h) => (
-                  <th key={h} className="text-left px-5 py-3.5 text-gray-400 font-semibold whitespace-nowrap">{h}</th>
+                <th className="report-th sticky top-0 z-20 text-left px-5 py-3.5 text-gray-400 font-semibold whitespace-nowrap">Phone Number</th>
+                {effVariables.map((v) => (
+                  <th key={v} className="report-th sticky top-0 z-20 text-left px-5 py-3.5 text-blue-300 font-mono font-semibold whitespace-nowrap">{v}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {!hasFetched ? (
-                <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-500">Pick a date range and click <span className="text-green-400 font-semibold">Fetch</span> to load the report.</td></tr>
-              ) : paged.length === 0 ? (
-                <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-500">{inProgress ? "Fetching… rows will appear here." : "No variable data for this range"}</td></tr>
-              ) : paged.map((r, i) => (
-                <tr key={`${r.mobile}-${r.variable}-${r.timestamp}-${i}`} className="hover:bg-white/5 transition-colors">
-                  <td className="px-5 py-3 font-medium text-gray-200 whitespace-nowrap">{r.mobile}</td>
-                  <td className="px-5 py-3 font-mono text-blue-300 whitespace-nowrap">{r.variable}</td>
-                  <td className="px-5 py-3 text-gray-300 max-w-[320px] truncate" title={r.value}>{r.value || "—"}</td>
-                  <td className="px-5 py-3 text-gray-400 whitespace-nowrap">{fmtDateTime(r.timestamp)}</td>
+                <tr><td colSpan={effVariables.length + 1} className="px-5 py-8 text-center text-gray-500">Pick a date range and click <span className="text-green-400 font-semibold">Fetch</span> to load the report.</td></tr>
+              ) : pagedPivot.length === 0 ? (
+                <tr><td colSpan={Math.max(1, effVariables.length + 1)} className="px-5 py-8 text-center text-gray-500">{inProgress ? "Fetching… rows will appear here." : "No variable data for this range"}</td></tr>
+              ) : pagedPivot.map((pr) => (
+                <tr key={pr.mobile} className="hover:bg-white/5 transition-colors">
+                  <td className="px-5 py-3 font-medium text-gray-200 whitespace-nowrap">{pr.mobile}</td>
+                  {effVariables.map((v) => (
+                    <td key={v} className="px-5 py-3 text-gray-300 max-w-[240px] truncate" title={pr.vars[v] ?? ""}>{pr.vars[v] ?? ""}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -238,7 +284,7 @@ export default function VariableReportPage() {
         {/* Pagination */}
         <div className="flex items-center justify-end gap-4 text-sm text-gray-400">
           <span>
-            {filtered.length === 0 ? "0" : `${safePage * PER_PAGE + 1}-${Math.min((safePage + 1) * PER_PAGE, filtered.length)}`} of {filtered.length}
+            {activeCount === 0 ? "0" : `${safePage * PER_PAGE + 1}-${Math.min((safePage + 1) * PER_PAGE, activeCount)}`} of {activeCount}
           </span>
           <div className="flex items-center gap-1">
             <button onClick={() => setPage(0)} disabled={safePage === 0} className="px-2 py-1 rounded hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed">⏮</button>
@@ -249,6 +295,81 @@ export default function VariableReportPage() {
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+// Multi-select dropdown to pick which variable columns to show. Empty
+// selection = show all. Includes a search box and All / Clear shortcuts.
+function VariableFilter({
+  variables,
+  picked,
+  onChange,
+}: {
+  variables: string[];
+  picked: string[] | null; // null = all
+  onChange: (next: string[] | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const shown = q ? variables.filter((v) => v.toLowerCase().includes(q.toLowerCase())) : variables;
+  const isAll = picked === null;
+  const label = isAll ? "All variables" : `${picked.length} of ${variables.length}`;
+  const isChecked = (v: string) => isAll || picked!.includes(v);
+
+  function toggle(v: string) {
+    // From "all", unchecking one starts an explicit list of everything but v.
+    if (isAll) { onChange(variables.filter((x) => x !== v)); return; }
+    const next = picked!.includes(v) ? picked!.filter((x) => x !== v) : [...picked!, v];
+    // If they end up with every variable checked, collapse back to "all".
+    onChange(next.length === variables.length ? null : next);
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        disabled={variables.length === 0}
+        className="text-sm px-4 py-2 bg-white/10 border border-white/10 rounded-lg text-gray-200 hover:bg-white/15 transition-colors cursor-pointer font-semibold disabled:opacity-40 whitespace-nowrap"
+      >
+        🎛 Variables: {label} ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute z-40 mt-2 w-72 glass rounded-xl border border-white/10 shadow-xl p-3">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <button onClick={() => onChange(null)} className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-300 hover:bg-green-500/30 cursor-pointer">Select all</button>
+              <button onClick={() => onChange([])} className="text-xs px-2 py-1 rounded bg-white/10 text-gray-300 hover:bg-white/20 cursor-pointer">Deselect all</button>
+              {/* Picks exactly the currently-searched variables — quick way to
+                  isolate e.g. all @Budget* columns. */}
+              {q && <button onClick={() => onChange([...shown])} className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 cursor-pointer">Only these</button>}
+            </div>
+            <input
+              type="text"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search variables…"
+              className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-green-500/40 mb-2"
+            />
+            <div className="max-h-64 overflow-auto space-y-0.5">
+              {shown.length === 0 ? (
+                <p className="text-xs text-gray-500 px-1 py-2">No matching variables</p>
+              ) : shown.map((v) => (
+                <label key={v} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isChecked(v)}
+                    onChange={() => toggle(v)}
+                    className="accent-green-500 cursor-pointer"
+                  />
+                  <span className="font-mono text-blue-300 text-sm truncate">{v}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
