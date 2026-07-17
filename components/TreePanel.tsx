@@ -99,7 +99,7 @@ export default function TreePanel({ selectedTreeId, onSelectTree }: TreePanelPro
   }
 
   return (
-    <div className="w-60 shrink-0 bg-white/5 border-r border-white/10 flex flex-col overflow-hidden">
+    <div className="w-60 shrink-0 bg-white/5 border-r border-white/10 flex flex-col overflow-hidden h-full">
       <div className="p-4 border-b border-white/10 shrink-0">
         <p className="text-xs font-semibold text-gray-400 uppercase mb-3">Trees</p>
         {creating ? (

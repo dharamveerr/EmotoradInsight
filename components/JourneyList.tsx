@@ -53,7 +53,7 @@ export default function JourneyList({
   };
 
   return (
-    <div className="w-56 shrink-0 bg-white/5 border-r border-white/10 flex flex-col overflow-hidden">
+    <div className="w-full shrink-0 bg-white/5 border-r border-white/10 flex flex-col overflow-hidden h-full">
       {/* Header */}
       <div className="p-4 border-b border-white/10 shrink-0">
         <p className="text-xs font-semibold text-gray-400 uppercase mb-3">Journeys</p>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import getDb from "@/lib/db";
+import { relabelEventsForClient } from "@/lib/relabel-events";
 
 // Publish a tree: it becomes the single active tree driving all dashboard
 // analytics. Any previously published tree reverts to draft. POST with
@@ -48,6 +49,17 @@ export async function POST(
   await db.prepare(
     "UPDATE journeys SET status = 'published', published_at = ?, updated_at = ? WHERE tree_id = ?"
   ).run(now, now, id);
+
+  // Relabel any events that were stored with raw bot_template_id UUIDs
+  // instead of the published tree's friendly journey/step names.
+  if (tree.client_id) {
+    try {
+      await relabelEventsForClient(tree.client_id);
+    } catch (e) {
+      // Non-fatal — reports will still show unrelabeled data until fixed.
+      console.error("relabelEventsForClient failed after publish:", e);
+    }
+  }
 
   return NextResponse.json({ id, status: "published", published_at: now });
 }

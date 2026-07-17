@@ -6,6 +6,7 @@ import Topbar from "@/components/Topbar";
 import TypewriterLoader from "@/components/TypewriterLoader";
 import DateRangePicker from "@/components/DatePicker";
 import ResetButton from "@/components/ResetButton";
+import SelectGlass from "@/components/SelectGlass";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useActiveClientId } from "@/lib/useActiveClientId";
 
@@ -17,6 +18,8 @@ const toLocalDateString = (d = new Date()) =>
 type Row = { mobile: string; variable: string; value: string; timestamp: string; journey: string };
 type Job = { from: string; to: string; status: "pending" | "done" | "error"; count: number; error: string | null } | null;
 type PivotRow = { mobile: string; vars: Record<string, string> };
+type ValueCondition = "equals" | "contains" | "not_contains";
+type ValueFilter = { id: string; variable: string; condition: ValueCondition; value: string };
 
 export default function VariableReportPage() {
   const today = toLocalDateString();
@@ -68,7 +71,16 @@ export default function VariableReportPage() {
   const [search, setSearch] = useState("");
   // Variable column filter. null = show all (default); an array = show exactly
   // those variables ([] = show none).
-  const [pickedVars, setPickedVars] = useState<string[] | null>(null);
+  const [pickedVars, setPickedVars, resetPickedVars] = usePersistentState<string[] | null>(
+    `filter:var-report:picked-vars:${clientId ?? "none"}`,
+    null
+  );
+  // Value filters: rows must match every condition (AND). Each condition
+  // tests one variable's value against a typed string.
+  const [valueFilters, setValueFilters, resetValueFilters] = usePersistentState<ValueFilter[]>(
+    `filter:var-report:value-filters:${clientId ?? "none"}`,
+    []
+  );
   const [page, setPage] = useState(0);
   const PER_PAGE = 25;
 
@@ -101,7 +113,7 @@ export default function VariableReportPage() {
     try { await mutate(); } finally { setSyncing(false); }
   }
 
-  function resetRange() { resetFrom(); resetTo(); setCommitted(null); setStarting(false); setPage(0); }
+  function resetRange() { resetFrom(); resetTo(); setCommitted(null); setStarting(false); setPage(0); resetPickedVars(); resetValueFilters(); }
 
   const q = search.trim().toLowerCase();
 
@@ -124,9 +136,6 @@ export default function VariableReportPage() {
         m[r.variable] = r.value;
       }
     }
-    // Column + row ordering match the canonical source export exactly:
-    //  - variables sorted case-insensitively (lowercase codepoint compare)
-    //  - phone rows sorted descending as strings
     const lc = (a: string, b: string) => {
       const la = a.toLowerCase(), lb = b.toLowerCase();
       return la < lb ? -1 : la > lb ? 1 : 0;
@@ -138,12 +147,27 @@ export default function VariableReportPage() {
     };
   }, [rows]);
 
-  const pivotFiltered = q
+  const searched = q
     ? pivotRows.filter((pr) =>
         pr.mobile.toLowerCase().includes(q) ||
         Object.entries(pr.vars).some(([k, v]) => k.toLowerCase().includes(q) || (v || "").toLowerCase().includes(q))
       )
     : pivotRows;
+
+  // Value filters — every condition must pass (AND). A missing value counts
+  // as an empty string, so "not contains" is true and "equals"/"contains" are false.
+  const activeValueFilters = valueFilters.filter((f) => f.variable && f.value.trim() !== "");
+  const pivotFiltered = activeValueFilters.length === 0
+    ? searched
+    : searched.filter((pr) =>
+        activeValueFilters.every((f) => {
+          const actual = (pr.vars[f.variable] ?? "").toLowerCase();
+          const expected = f.value.trim().toLowerCase();
+          if (f.condition === "equals") return actual === expected;
+          if (f.condition === "contains") return actual.includes(expected);
+          return !actual.includes(expected); // not_contains
+        })
+      );
 
   // Apply the variable column filter. null = show every variable.
   const effVariables = pickedVars === null ? variables : variables.filter((v) => pickedVars.includes(v));
@@ -243,6 +267,11 @@ export default function VariableReportPage() {
             picked={pickedVars}
             onChange={(p) => { setPickedVars(p); setPage(0); }}
           />
+          <ValueFilterBar
+            variables={variables}
+            filters={valueFilters}
+            onChange={(f) => { setValueFilters(f); setPage(0); }}
+          />
           <input
             type="text"
             value={search}
@@ -259,7 +288,7 @@ export default function VariableReportPage() {
             <thead className="border-b border-white/10">
               <tr>
                 <th className="report-th sticky top-0 z-20 text-left px-5 py-3.5 text-gray-400 font-semibold whitespace-nowrap">Phone Number</th>
-                {effVariables.map((v) => (
+{effVariables.map((v) => (
                   <th key={v} className="report-th sticky top-0 z-20 text-left px-5 py-3.5 text-blue-300 font-mono font-semibold whitespace-nowrap">{v}</th>
                 ))}
               </tr>
@@ -366,6 +395,112 @@ function VariableFilter({
                   <span className="font-mono text-blue-300 text-sm truncate">{v}</span>
                 </label>
               ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const CONDITION_LABELS: Record<ValueCondition, string> = {
+  equals: "is equal to",
+  contains: "contains",
+  not_contains: "does not contain",
+};
+
+// Dropdown to build one or more "variable <condition> value" rules, ANDed
+// together against the pivoted rows (e.g. @budget contains "20-30L").
+function ValueFilterBar({
+  variables,
+  filters,
+  onChange,
+}: {
+  variables: string[];
+  filters: ValueFilter[];
+  onChange: (next: ValueFilter[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const activeCount = filters.filter((f) => f.variable && f.value.trim() !== "").length;
+
+  function addFilter() {
+    onChange([...filters, { id: `${Date.now()}-${Math.random()}`, variable: variables[0] || "", condition: "contains", value: "" }]);
+  }
+  function updateFilter(id: string, patch: Partial<ValueFilter>) {
+    onChange(filters.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+  }
+  function removeFilter(id: string) {
+    onChange(filters.filter((f) => f.id !== id));
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        disabled={variables.length === 0}
+        className="text-sm px-4 py-2 bg-white/10 border border-white/10 rounded-lg text-gray-200 hover:bg-white/15 transition-colors cursor-pointer font-semibold disabled:opacity-40 whitespace-nowrap"
+      >
+        ⏷ Filters{activeCount > 0 ? `: ${activeCount}` : ""} ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute z-40 mt-2 w-[280px] glass rounded-xl border border-white/10 shadow-xl p-3">
+            {filters.length === 0 ? (
+              <p className="text-xs text-gray-500 px-1 py-2">No filters yet — add one to match a variable's value.</p>
+            ) : (
+              <div className="space-y-3 max-h-[26rem] overflow-y-auto overflow-x-hidden">
+                {filters.map((f, i) => (
+                  <div key={f.id} className="flex flex-col gap-1.5 pb-3 border-b border-white/10 last:border-b-0 last:pb-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Condition {i + 1}</span>
+                      <button
+                        onClick={() => removeFilter(f.id)}
+                        title="Remove filter"
+                        className="text-gray-500 hover:text-red-300 transition-colors px-1 cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <SelectGlass
+                      value={f.variable}
+                      onChange={(v) => updateFilter(f.id, { variable: v })}
+                      options={variables.map((v) => ({ value: v, label: v }))}
+                      className="w-full"
+                    />
+                    <SelectGlass
+                      value={f.condition}
+                      onChange={(v) => updateFilter(f.id, { condition: v as ValueCondition })}
+                      options={(Object.keys(CONDITION_LABELS) as ValueCondition[]).map((c) => ({ value: c, label: CONDITION_LABELS[c] }))}
+                      className="w-full"
+                    />
+                    <input
+                      type="text"
+                      value={f.value}
+                      onChange={(e) => updateFilter(f.id, { value: e.target.value })}
+                      placeholder="value…"
+                      className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-green-500/40"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/10">
+              <button
+                onClick={addFilter}
+                disabled={variables.length === 0}
+                className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-300 hover:bg-green-500/30 cursor-pointer disabled:opacity-40"
+              >
+                + Add condition
+              </button>
+              {filters.length > 0 && (
+                <button
+                  onClick={() => onChange([])}
+                  className="text-xs px-2 py-1 rounded bg-white/10 text-gray-300 hover:bg-white/20 cursor-pointer"
+                >
+                  Clear all
+                </button>
+              )}
             </div>
           </div>
         </>

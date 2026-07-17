@@ -45,6 +45,16 @@ export async function GET(req: NextRequest) {
   const js = journeyKeys.length ? ` AND journey IN (${journeyKeys.map(() => "?").join(",")})` : "";
   const jp: string[] = journeyKeys.length ? journeyKeys : [];
 
+  // No published tree → return empty/zero for every report type so no
+  // hardcoded or unscoped data leaks through.
+  if (journeyKeys.length === 0 && !journey) {
+    if (type === "overview") return NextResponse.json({ todaySessions: 0, activeJourneys: 0, completionRate: 0, dropoffRate: 0, last7Days: [], journeyDist: [], journeyBreakdown: [] });
+    if (type === "funnel") return NextResponse.json({ funnel: [] });
+    if (type === "heatmap") return NextResponse.json({ heatmap: [] });
+    if (type === "dropoff") return NextResponse.json({ dropoff: [], journey: "all" });
+    if (type === "product-analytics") return NextResponse.json({ funnel: [], byDate: [], byHour: [], productDistribution: [], priceDistribution: [], kpis: { uniqueUsers: 0, totalCount: 0, started: 0, completed: 0, dropped: 0 } });
+  }
+
   // ── OVERVIEW ──────────────────────────────────────────────────────────
   if (type === "overview") {
     const today    = new Date().toISOString().slice(0, 10);

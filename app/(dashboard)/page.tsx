@@ -74,6 +74,7 @@ export default function OverviewPage() {
   );
 
   const journeyBreakdown = data?.journeyBreakdown || [];
+  const noJourneysLive = !isLoading && Object.keys(JOURNEY_LABELS).length === 0;
   const isToday = fromDate === today && toDate === today;
   const isSingleDay = fromDate === toDate;
 
@@ -97,14 +98,28 @@ export default function OverviewPage() {
           </span>
           <DataRangeBadge />
         </div>
+        {/* No journeys live yet */}
+        {noJourneysLive && (
+          <div className="flex flex-col items-center justify-center py-24 animate-fade-in">
+            <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-10 h-10 text-gray-500">
+                <path d="M3 3v18h18" />
+                <path d="M7 16l4-4 4 4 4-6" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">No journeys live yet</h2>
+            <p className="text-sm text-gray-500 text-center max-w-xs">Publish a journey tree for this client to start seeing analytics here.</p>
+          </div>
+        )}
+
         {/* Top KPIs */}
-        {isLoading ? (
+        {!noJourneysLive && isLoading ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="skeleton rounded-2xl h-32" />
             ))}
           </div>
-        ) : (
+        ) : !noJourneysLive ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
             <KpiCard
               label="Total Reach"
@@ -139,10 +154,10 @@ export default function OverviewPage() {
               icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><path d="M3 3v18h18" /><path d="M19 15l-5 5-4-4-3 3" /></svg>}
             />
           </div>
-        )}
+        ) : null}
 
         {/* Sessions Trend */}
-        <div className="glass rounded-2xl p-6 animate-fade-in delay-3">
+        {!noJourneysLive && <div className="glass rounded-2xl p-6 animate-fade-in delay-3">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="font-bold text-white">Chatbot Reach</h2>
@@ -165,10 +180,10 @@ export default function OverviewPage() {
               <Area type="monotone" dataKey="count" stroke="#22c55e" strokeWidth={2.5} fill="url(#grad)" dot={{ r: 4, fill: "#22c55e", strokeWidth: 0 }} activeDot={{ r: 6, fill: "#22c55e" }} />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </div>}
 
         {/* Per-Journey Breakdown */}
-        <div>
+        {!noJourneysLive && <div>
           <h2 className="text-xl font-bold text-white mb-5">Journey Performance</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
             {isLoading ? (
@@ -228,7 +243,7 @@ export default function OverviewPage() {
               <div className="col-span-full text-center py-10 text-gray-500">No journey data</div>
             )}
           </div>
-        </div>
+        </div>}
       </main>
     </div>
   );

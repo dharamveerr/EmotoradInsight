@@ -116,7 +116,7 @@ function OptionRow({
 
   return (
     <div
-      className="flex items-start gap-2 px-3 py-2 hover:bg-white/5 rounded group"
+      className="flex items-start gap-2 px-2 py-0 hover:bg-white/5 rounded group"
       style={{ marginLeft: `${level * 24}px` }}
     >
       <span className="text-gray-500 mt-1.5">↳</span>
@@ -126,11 +126,12 @@ function OptionRow({
         value={option.label}
         onChange={(e) => onUpdateOption(stepId, option.id, { label: e.target.value })}
         placeholder="Option label…"
-        className="flex-1 bg-white/10 border border-white/10 rounded px-2 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500/40"
+        className="w-48 bg-white/10 border border-white/10 rounded px-2 py-0.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500/40"
       />
 
-      {/* Multi-variable selector */}
-      <div className="flex flex-col gap-1.5 w-56 shrink-0">
+      {/* Multi-variable selector + buttons */}
+      <div className="flex items-start gap-1.5">
+        <div className="flex flex-col gap-1.5">
         {/* Selected variable chips */}
         {selectedVars.length > 0 && (
           <div className="flex flex-wrap gap-1">
@@ -213,32 +214,33 @@ function OptionRow({
             </ul>
           )}
         </div>
-      </div>
+        </div>
 
-      <div className="flex gap-1 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={() => onCopyVars(selectedIds)}
-          disabled={selectedIds.length === 0}
-          className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 transition-colors disabled:opacity-30 whitespace-nowrap"
-          title="Copy this option's variables"
-        >
-          ⧉ Copy
-        </button>
-        <button
-          onClick={() => onPasteVars(stepId, option.id)}
-          disabled={clipboard.length === 0}
-          className="text-xs px-2 py-1 bg-green-500/20 text-green-300 rounded hover:bg-green-500/30 transition-colors disabled:opacity-30 whitespace-nowrap"
-          title={clipboard.length ? `Paste ${clipboard.length} variable(s)` : "Copy variables first"}
-        >
-          ⤓ Paste
-        </button>
-        <button
-          onClick={() => onDeleteOption(stepId, option.id)}
-          className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors"
-          title="Delete option"
-        >
-          ✕
-        </button>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <button
+            onClick={() => onCopyVars(selectedIds)}
+            disabled={selectedIds.length === 0}
+            className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 transition-colors disabled:opacity-30 whitespace-nowrap"
+            title="Copy this option's variables"
+          >
+            ⧉ Copy
+          </button>
+          <button
+            onClick={() => onPasteVars(stepId, option.id)}
+            disabled={clipboard.length === 0}
+            className="text-xs px-2 py-1 bg-green-500/20 text-green-300 rounded hover:bg-green-500/30 transition-colors disabled:opacity-30 whitespace-nowrap"
+            title={clipboard.length ? `Paste ${clipboard.length} variable(s)` : "Copy variables first"}
+          >
+            ⤓ Paste
+          </button>
+          <button
+            onClick={() => onDeleteOption(stepId, option.id)}
+            className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors"
+            title="Delete option"
+          >
+            ✕
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -279,12 +281,12 @@ function StepRow({
   return (
     <div>
       <div
-        className="flex items-center gap-2 px-3 py-2 hover:bg-white/5 rounded group"
+        className="relative flex items-center gap-2 px-3 py-2 pr-[178px] hover:bg-white/5 rounded group"
         style={{ marginLeft: `${level * 24}px` }}
       >
         <button
           onClick={() => setExpanded(!expanded)}
-          className="text-gray-500 hover:text-gray-300 w-4 text-center"
+          className="text-gray-500 hover:text-gray-300 w-4 text-center shrink-0"
           title={expanded ? "Collapse" : "Expand"}
         >
           {hasContent ? (expanded ? "▼" : "▶") : "•"}
@@ -298,34 +300,36 @@ function StepRow({
           className="flex-1 bg-white/10 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500/40"
         />
 
-        <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-semibold whitespace-nowrap">
+        <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-semibold whitespace-nowrap shrink-0">
           {step.options.length} opt
           {hasChildren ? ` · ${children.length} sub` : ""}
         </span>
 
-        <button
-          onClick={() => onAddOption(step.id)}
-          className="text-xs px-2 py-1 bg-green-500/20 text-green-300 rounded hover:bg-green-500/30 transition-colors opacity-0 group-hover:opacity-100 whitespace-nowrap"
-          title="Add option to this step"
-        >
-          + Option
-        </button>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto shrink-0">
+          <button
+            onClick={() => onAddOption(step.id)}
+            className="text-xs px-2 py-1 bg-green-500/20 text-green-300 rounded hover:bg-green-500/30 transition-colors whitespace-nowrap"
+            title="Add option to this step"
+          >
+            + Option
+          </button>
 
-        <button
-          onClick={() => onAddChildStep(step.id)}
-          className="text-xs px-2 py-1 bg-purple-500/20 text-purple-300 rounded hover:bg-purple-500/30 transition-colors opacity-0 group-hover:opacity-100 whitespace-nowrap"
-          title="Add child step (nested under this step)"
-        >
-          + Step
-        </button>
+          <button
+            onClick={() => onAddChildStep(step.id)}
+            className="text-xs px-2 py-1 bg-purple-500/20 text-purple-300 rounded hover:bg-purple-500/30 transition-colors whitespace-nowrap"
+            title="Add child step (nested under this step)"
+          >
+            + Step
+          </button>
 
-        <button
-          onClick={() => onDeleteStep(step.id)}
-          className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors opacity-0 group-hover:opacity-100"
-          title="Delete step"
-        >
-          ✕
-        </button>
+          <button
+            onClick={() => onDeleteStep(step.id)}
+            className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors"
+            title="Delete step"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {expanded && step.options.length > 0 && (
@@ -540,27 +544,20 @@ export default function JourneyBuilder({
 
   return (
     <div className="flex-1 min-w-[320px] flex flex-col overflow-auto bg-white/3">
-      {/* Header */}
-      <div className="p-4 border-b border-white/10 shrink-0">
-        <h3 className="text-sm font-bold text-white">{journey.name || "Untitled Journey"}</h3>
-        <p className="text-xs text-gray-500 mt-1">
-          Drag variables to add steps. {journey.steps.length} step(s)
-        </p>
-        {varClipboard.length > 0 && (
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs text-blue-300">
-              📋 Copied {varClipboard.length} variable(s) — hover an option, click Paste
-            </span>
-            <button
-              onClick={() => setVarClipboard([])}
-              className="text-xs text-gray-500 hover:text-red-300"
-              title="Clear clipboard"
-            >
-              clear
-            </button>
-          </div>
-        )}
-      </div>
+      {varClipboard.length > 0 && (
+        <div className="flex items-center gap-2 mt-2 px-4 pt-4 shrink-0">
+          <span className="text-xs text-blue-300">
+            📋 Copied {varClipboard.length} variable(s) — hover an option, click Paste
+          </span>
+          <button
+            onClick={() => setVarClipboard([])}
+            className="text-xs text-gray-500 hover:text-red-300"
+            title="Clear clipboard"
+          >
+            clear
+          </button>
+        </div>
+      )}
 
       {/* Steps */}
       <div

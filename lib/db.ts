@@ -416,12 +416,18 @@ async function initDb(): Promise<DB> {
   await addColumn("ALTER TABLE client_variables ADD COLUMN IF NOT EXISTS is_new INTEGER DEFAULT 0");
   // Per-user report permissions (JSON array of permission keys, e.g. ["journey_analytics"])
   await addColumn("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS permissions TEXT");
+  // Multi-client assignment (JSON array of client IDs)
+  await addColumn("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS client_ids TEXT DEFAULT '[]'");
 
   // One-time backfill: rows predating this column (NULL) keep their current
   // access by granting journey_analytics. New self-signups insert '[]' so they
   // start with no report access until a super admin grants it.
   await pool.query(
     "UPDATE app_users SET permissions = '[\"journey_analytics\"]' WHERE permissions IS NULL"
+  );
+  // Backfill client_ids from client_id for existing single-client users
+  await pool.query(
+    "UPDATE app_users SET client_ids = json_build_array(client_id) WHERE client_id IS NOT NULL AND (client_ids IS NULL OR client_ids = '[]')"
   );
 
   await pool.query("CREATE INDEX IF NOT EXISTS idx_journey_tree ON journeys(tree_id)");

@@ -40,7 +40,14 @@ export async function PATCH(
     }
   }
 
-  const allowed = ["role", "is_active", "name", "client_id", "permissions"] as const;
+  // Handle client_ids (multi-client): derive client_id from first element
+  if ("client_ids" in body) {
+    const ids: string[] = Array.isArray(body.client_ids) ? body.client_ids.filter(Boolean) : [];
+    body.client_ids = ids;
+    body.client_id = ids[0] || null;
+  }
+
+  const allowed = ["role", "is_active", "name", "client_id", "client_ids", "permissions"] as const;
   const updates: string[] = [];
   const values: unknown[] = [];
 
@@ -51,6 +58,7 @@ export async function PATCH(
       }
       updates.push(`${key} = ?`);
       if (key === "client_id") values.push(body[key] || null);
+      else if (key === "client_ids") values.push(JSON.stringify(Array.isArray(body[key]) ? body[key] : []));
       // permissions stored as JSON array string
       else if (key === "permissions") values.push(JSON.stringify(Array.isArray(body[key]) ? body[key] : []));
       else values.push(body[key]);

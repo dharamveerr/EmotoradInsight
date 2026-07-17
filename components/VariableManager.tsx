@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import useSWR from "swr";
 import { Variable } from "@/lib/types";
 import VariableUploadModal from "./VariableUploadModal";
+import { useActiveClientId } from "@/lib/useActiveClientId";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -15,6 +16,9 @@ type DiscoveredVar = {
   synced?: boolean;
 };
 
+// Session-scoped filter — clears on page refresh, persists across navigation.
+let _vrFilter: string[] | null = null;
+
 // Short, readable label for a bot_template_id UUID (first segment).
 const shortTpl = (id: string) => `Template ${id.split("-")[0]}`;
 
@@ -24,6 +28,7 @@ interface VariableManagerProps {
 
 export default function VariableManager({ onDragStart }: VariableManagerProps) {
   const { data, isLoading, mutate } = useSWR("/api/variables", fetcher);
+  const clientId = useActiveClientId();
   const variables: Variable[] = data?.variables || [];
   const discovered: DiscoveredVar[] = data?.discovered || [];
   const [search, setSearch] = useState("");
@@ -37,13 +42,41 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
   const [syncMsg, setSyncMsg] = useState("");
   const [syncError, setSyncError] = useState(false);
   const [toast, setToast] = useState("");
+  const [vrFilter, setVrFilterState] = useState<string[] | null>(_vrFilter);
+  const [vrSyncError, setVrSyncError] = useState<string | null>(null);
+  const [panelHidden, setPanelHidden] = useState(false);
+
+  function setVrFilter(v: string[] | null) { _vrFilter = v; setVrFilterState(v); }
+
+  function readPersisted<T>(key: string): T | null {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { v: T; t: number };
+      return parsed?.v ?? null;
+    } catch { return null; }
+  }
+
+  function handleVrSync() {
+    const cid = clientId ?? "none";
+    const picked = readPersisted<string[]>(`filter:var-report:picked-vars:${cid}`);
+    if (!Array.isArray(picked) || picked.length === 0) {
+      setVrSyncError("No variable filter in Variable Report — select variables there first.");
+      return;
+    }
+    setVrSyncError(null);
+    setVrFilter(picked);
+  }
+
+  function clearVrFilter() { setVrFilter(null); setVrSyncError(null); }
 
   const matchesSearch = (name: string) => name.toLowerCase().includes(search.toLowerCase());
-  const filtered = variables.filter((v: Variable) => matchesSearch(v.name));
+  const matchesVr = (name: string) => !vrFilter || vrFilter.includes(name);
+  const filtered = variables.filter((v: Variable) => matchesSearch(v.name) && matchesVr(v.name));
   // Synced source vars carry a bot_template_id → grouped into per-template
   // sections. Event-derived vars (no template) fall under "From data".
-  const syncedVars = discovered.filter((v) => v.bot_template_id && matchesSearch(v.name));
-  const dataVars = discovered.filter((v) => !v.bot_template_id && matchesSearch(v.name));
+  const syncedVars = discovered.filter((v) => v.bot_template_id && matchesSearch(v.name) && matchesVr(v.name));
+  const dataVars = discovered.filter((v) => !v.bot_template_id && matchesSearch(v.name) && matchesVr(v.name));
   const templateGroups = Object.entries(
     syncedVars.reduce<Record<string, DiscoveredVar[]>>((acc, v) => {
       const k = v.bot_template_id as string;
@@ -146,6 +179,22 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
     }
   };
 
+  if (panelHidden) {
+    return (
+      <div className="w-5 shrink-0 border-l border-white/10 flex items-start justify-center pt-2">
+        <button
+          onClick={() => setPanelHidden(false)}
+          className="text-gray-500 hover:text-gray-200 transition-colors cursor-pointer"
+          title="Show Variables panel"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="w-80 shrink-0 bg-white/5 border-l border-white/10 flex flex-col overflow-hidden">
       {/* Header */}
@@ -154,7 +203,9 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
           <p className="text-xs font-semibold text-gray-400 uppercase">
             Variables
             <span className="ml-1.5 text-gray-600 normal-case font-normal">
-              {variables.length + discovered.length}
+              {vrFilter
+                ? `${filtered.length + syncedVars.length + dataVars.length} / ${variables.length + discovered.length}`
+                : variables.length + discovered.length}
             </span>
           </p>
           <div className="flex items-center gap-1.5">
@@ -173,8 +224,43 @@ export default function VariableManager({ onDragStart }: VariableManagerProps) {
             >
               📤 Upload
             </button>
+            <button
+              onClick={() => setPanelHidden(true)}
+              className="text-gray-500 hover:text-gray-300 transition-colors cursor-pointer ml-0.5"
+              title="Hide Variables panel"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
           </div>
         </div>
+        {/* Variable Report filter row */}
+        <div className="flex items-center gap-2 mb-2">
+          {!vrFilter ? (
+            <button
+              onClick={handleVrSync}
+              className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded hover:bg-purple-500/30 transition-colors cursor-pointer"
+              title="Show only variables selected in Variable Report"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3">
+                <path d="M4 6h16M7 12h10M10 18h4" />
+              </svg>
+              Sync Variable Report
+            </button>
+          ) : (
+            <div className="flex-1 flex items-center justify-between gap-2 px-2 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-xs">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse inline-block" />
+                {vrFilter.length} var{vrFilter.length !== 1 ? "s" : ""} from VR
+              </span>
+              <button onClick={clearVrFilter} className="text-purple-400 hover:text-purple-200 font-bold leading-none" title="Clear filter">×</button>
+            </div>
+          )}
+        </div>
+        {vrSyncError && (
+          <p className="text-xs text-red-400 mb-2">{vrSyncError}</p>
+        )}
         {syncMsg && (
           <p className={`text-xs font-medium mb-3 px-3 py-2 rounded-lg border ${syncError ? "text-slate-600 bg-amber-50/60 border-amber-200" : "text-slate-600 bg-emerald-50/60 border-emerald-200"}`}>
             {syncError ? "⚠ " : "✓ "}{syncMsg}

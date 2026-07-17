@@ -51,19 +51,32 @@ export default function SelectGlass({ value, onChange, options, className = "" }
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
+  // Clamp the menu to the visible viewport so long option lists scroll
+  // internally instead of overflowing past the bottom of the screen (the
+  // menu is position:fixed, so page scroll can't bring hidden items into view).
+  function computeMenuStyle(r: DOMRect): React.CSSProperties {
+    const margin = 12;
+    const spaceBelow = window.innerHeight - r.bottom - 6 - margin;
+    const spaceAbove = r.top - 6 - margin;
+    const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(120, openUp ? spaceAbove : spaceBelow);
+    return {
+      position: "fixed",
+      left: r.left,
+      width: r.width,
+      zIndex: 9999,
+      maxHeight,
+      overflowY: "auto",
+      ...(openUp ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }),
+    };
+  }
+
   // Reposition on scroll / resize while open
   useEffect(() => {
     if (!open) return;
     function update() {
       if (!btnRef.current) return;
-      const r = btnRef.current.getBoundingClientRect();
-      setMenuStyle({
-        position: "fixed",
-        top: r.bottom + 6,
-        left: r.left,
-        width: r.width,
-        zIndex: 9999,
-      });
+      setMenuStyle(computeMenuStyle(btnRef.current.getBoundingClientRect()));
     }
     update();
     window.addEventListener("scroll", update, true);
@@ -77,14 +90,7 @@ export default function SelectGlass({ value, onChange, options, className = "" }
   function toggleOpen() {
     if (open) { setOpen(false); return; }
     if (!btnRef.current) return;
-    const r = btnRef.current.getBoundingClientRect();
-    setMenuStyle({
-      position: "fixed",
-      top: r.bottom + 6,
-      left: r.left,
-      width: r.width,
-      zIndex: 9999,
-    });
+    setMenuStyle(computeMenuStyle(btnRef.current.getBoundingClientRect()));
     setOpen(true);
   }
 

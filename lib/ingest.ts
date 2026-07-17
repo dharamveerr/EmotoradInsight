@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import getDb from "@/lib/db";
 import { mapRows, SourceRow } from "@/lib/n8n-mapping";
+import { relabelEventsForClient } from "@/lib/relabel-events";
 
 export type IngestResult = {
   received: number;
@@ -48,6 +49,14 @@ export async function ingestRows(clientId: string, rows: SourceRow[]): Promise<I
          WHERE id = ? AND (last_synced_at IS NULL OR last_synced_at < ?)`
       )
       .run(maxCreatedAt, clientId, maxCreatedAt);
+  }
+
+  // Relabel any events stored with raw bot_template_id UUIDs to the
+  // published tree's friendly journey/step names (non-fatal if no tree yet).
+  try {
+    await relabelEventsForClient(clientId);
+  } catch {
+    // No published tree yet — events stay as-is until a tree is published.
   }
 
   return {

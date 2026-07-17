@@ -49,7 +49,7 @@ export async function getJourneyConfig(): Promise<JourneyConfig> {
 
   const clientId = await getActiveClientId();
   if (!clientId) {
-    return { labels: { ...JOURNEY_LABELS }, steps: { ...JOURNEY_STEPS }, tree: null };
+    return { labels: {}, steps: {}, tree: null };
   }
 
   const tree = await db
@@ -57,7 +57,7 @@ export async function getJourneyConfig(): Promise<JourneyConfig> {
     .get<{ id: string; name: string }>(clientId);
 
   if (!tree) {
-    return { labels: { ...JOURNEY_LABELS }, steps: { ...JOURNEY_STEPS }, tree: null };
+    return { labels: {}, steps: {}, tree: null };
   }
 
   const journeys = await db
@@ -80,11 +80,6 @@ export async function getJourneyConfig(): Promise<JourneyConfig> {
     // Funnel = the journey's own steps exactly. Only fall back to the journey
     // name when the journey has no steps defined (avoids an extra phantom step).
     steps[key] = flat.length ? flat : [j.name];
-  }
-
-  // Published tree with zero journeys would blank the dashboard — fall back
-  if (Object.keys(labels).length === 0) {
-    return { labels: { ...JOURNEY_LABELS }, steps: { ...JOURNEY_STEPS }, tree: null };
   }
 
   return { labels, steps, tree };

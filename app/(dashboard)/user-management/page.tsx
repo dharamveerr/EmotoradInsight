@@ -21,12 +21,14 @@ interface AppUser {
   last_login: string | null;
   client_id: string | null;
   client_name: string | null;
+  client_ids: string | null; // JSON array of client IDs
   permissions: string | null; // JSON array string, e.g. ["journey_analytics"]
 }
 
 interface Client {
   id: string;
   name: string;
+  subdomain?: string;
 }
 
 interface LoginSession {
@@ -115,20 +117,27 @@ function SessionSortHeader({
 }
 
 function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; onCreated: () => void; clients: Client[] }) {
-  const [form, setForm] = useState({ username: "", email: "", name: "", password: "", role: "admin", client_id: "", journeyAnalytics: false, agentStatistics: false });
+  const [form, setForm] = useState({ username: "", email: "", name: "", password: "", role: "admin", client_ids: [] as string[], journeyAnalytics: false, agentStatistics: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  function toggleClientId(id: string) {
+    setForm((f) => {
+      const next = f.client_ids.includes(id) ? f.client_ids.filter((x) => x !== id) : [...f.client_ids, id];
+      return { ...f, client_ids: next };
+    });
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const { journeyAnalytics, agentStatistics, ...rest } = form;
+    const { journeyAnalytics, agentStatistics, client_ids, ...rest } = form;
     const permissions = [
       ...(journeyAnalytics ? ["journey_analytics"] : []),
       ...(agentStatistics ? ["agent_statistics"] : []),
     ];
-    const payload = { ...rest, permissions };
+    const payload = { ...rest, client_ids, client_id: client_ids[0] || null, permissions };
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -235,17 +244,30 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
 
           {form.role !== "super_admin" && (
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Client</label>
-              <SelectGlass
-                value={form.client_id}
-                onChange={(val) => setForm((f) => ({ ...f, client_id: val }))}
-                options={[
-                  { value: "", label: "— No client —" },
-                  ...clients.map((c) => ({ value: c.id, label: c.name })),
-                ]}
-                className="w-full"
-              />
-              <p className="text-[10px] text-gray-500 mt-1">Client admins only see their assigned client&apos;s data.</p>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Clients</label>
+              <div className="max-h-36 overflow-y-auto space-y-1 rounded-xl border border-white/10 bg-white/3 p-2">
+                {clients.length === 0 ? (
+                  <p className="text-xs text-gray-500 px-1 py-1">No clients yet</p>
+                ) : clients.map((c) => {
+                  const checked = form.client_ids.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => toggleClientId(c.id)}
+                      className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-colors text-left ${
+                        checked ? "bg-purple-500/15 text-purple-200" : "text-gray-300 hover:bg-white/5"
+                      }`}
+                    >
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${checked ? "bg-purple-500 border-purple-400" : "border-white/20"}`}>
+                        {checked && <svg viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" className="w-3 h-3"><path d="M2 6l3 3 5-5"/></svg>}
+                      </span>
+                      <span className="font-mono text-xs">{c.subdomain || c.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">User can switch between all assigned clients.</p>
             </div>
           )}
 
@@ -322,20 +344,27 @@ function AddUserModal({ onClose, onCreated, clients }: { onClose: () => void; on
 
 // Per-row action icons. Role + Client open a small picker popover; Grant/Deny
 // and Delete fire directly. Replaces the old single kebab menu.
+function parseClientIds(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter(Boolean) : []; } catch { return []; }
+}
+
 function RowActionsMenu({
-  user, clients, isSuperAdmin, busy, onChangeRole, onChangeClient, onToggle, onTogglePerm, onDelete,
+  user, clients, isSuperAdmin, busy, onChangeRole, onChangeClients, onToggle, onTogglePerm, onDelete,
 }: {
   user: AppUser;
   clients: Client[];
   isSuperAdmin: boolean;
   busy: boolean;
   onChangeRole: (u: AppUser, role: string) => void;
-  onChangeClient: (u: AppUser, clientId: string) => void;
+  onChangeClients: (u: AppUser, clientIds: string[]) => void;
   onToggle: (u: AppUser) => void;
   onTogglePerm: (u: AppUser, key: string) => void;
   onDelete: (u: AppUser) => void;
 }) {
   const [menu, setMenu] = useState<"role" | "client" | "more" | null>(null);
+  // Local multi-select state for client picker — synced when menu opens
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [portalPos, setPortalPos] = useState<{ top: number; right: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
@@ -344,10 +373,13 @@ function RowActionsMenu({
     if (menu && ref.current) {
       const r = ref.current.getBoundingClientRect();
       setPortalPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+      if (menu === "client") {
+        setPendingIds(parseClientIds(user.client_ids));
+      }
     } else {
       setPortalPos(null);
     }
-  }, [menu]);
+  }, [menu, user.client_ids]);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -508,28 +540,47 @@ function RowActionsMenu({
           )}
           {menu === "client" && (
             <>
-              <div className="px-3 pt-2.5 pb-1 text-[10px] uppercase font-semibold text-gray-500">Client</div>
-              <div className="max-h-48 overflow-y-auto">
+              <div className="px-3 pt-2.5 pb-1 text-[10px] uppercase font-semibold text-gray-500">Clients</div>
+              <div className="max-h-52 overflow-y-auto">
+                {/* Unassigned shortcut */}
                 <button
-                  onClick={() => pick(() => onChangeClient(user, ""))}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
-                    !user.client_id ? "text-green-300 bg-green-500/10" : "text-gray-300 hover:bg-white/5 hover:text-white"
+                  onClick={() => { onChangeClients(user, []); setMenu(null); setPendingIds([]); }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                    pendingIds.length === 0 ? "text-green-300 bg-green-500/10" : "text-gray-400 hover:bg-white/5 hover:text-white"
                   }`}
                 >
-                  Unassigned {!user.client_id && <span className="text-xs">✓</span>}
+                  <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${pendingIds.length === 0 ? "bg-green-500 border-green-400" : "border-white/20"}`}>
+                    {pendingIds.length === 0 && <svg viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" className="w-3 h-3"><path d="M2 6l3 3 5-5"/></svg>}
+                  </span>
+                  Unassigned
                 </button>
-                {clients.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => pick(() => onChangeClient(user, c.id))}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
-                      user.client_id === c.id ? "text-green-300 bg-green-500/10" : "text-gray-300 hover:bg-white/5 hover:text-white"
-                    }`}
-                  >
-                    {c.name} {user.client_id === c.id && <span className="text-xs">✓</span>}
-                  </button>
-                ))}
+                {clients.map((c) => {
+                  const checked = pendingIds.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        const next = checked ? pendingIds.filter((x) => x !== c.id) : [...pendingIds, c.id];
+                        setPendingIds(next);
+                        onChangeClients(user, next);
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                        checked ? "text-purple-200 bg-purple-500/15" : "text-gray-300 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${checked ? "bg-purple-500 border-purple-400" : "border-white/20"}`}>
+                        {checked && <svg viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" className="w-3 h-3"><path d="M2 6l3 3 5-5"/></svg>}
+                      </span>
+                      <span className="font-mono text-xs">{c.subdomain || c.name}</span>
+                    </button>
+                  );
+                })}
               </div>
+              {pendingIds.length > 0 && (
+                <div className="px-3 py-2 border-t border-white/5 text-[10px] text-gray-500">
+                  {pendingIds.length} client{pendingIds.length !== 1 ? "s" : ""} assigned
+                </div>
+              )}
             </>
           )}
         </div>,
@@ -712,17 +763,17 @@ export default function UserManagementPage() {
     setUpdatingId(null);
   }
 
-  async function changeClient(user: AppUser, newClientId: string) {
+  async function changeClients(user: AppUser, newIds: string[]) {
     setUpdatingId(user.id);
     setWarning("");
     const res = await fetch(`/api/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: newClientId || null }),
+      body: JSON.stringify({ client_ids: newIds }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setWarning(data.error || "Failed to assign client");
+      setWarning(data.error || "Failed to assign clients");
     }
     mutate("/api/users");
     setUpdatingId(null);
@@ -893,13 +944,20 @@ export default function UserManagementPage() {
                         <td className="px-5 py-4">
                           {u.role === "super_admin" ? (
                             <span className="text-xs text-gray-500 italic">All clients</span>
-                          ) : u.client_name ? (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">
-                              {u.client_name}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-500">Unassigned</span>
-                          )}
+                          ) : (() => {
+                            const ids = parseClientIds(u.client_ids);
+                            if (ids.length === 0) return <span className="text-xs text-gray-500">Unassigned</span>;
+                            const assigned = ids.map((id) => clients.find((c) => c.id === id)).filter(Boolean) as Client[];
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {assigned.map((c) => (
+                                  <span key={c.id} className="inline-flex items-center text-[11px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                                    {c.subdomain || c.name}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Reports access (read-only) */}
@@ -955,7 +1013,7 @@ export default function UserManagementPage() {
                               isSuperAdmin={!!isSuperAdmin}
                               busy={updatingId === u.id}
                               onChangeRole={changeRole}
-                              onChangeClient={changeClient}
+                              onChangeClients={changeClients}
                               onToggle={toggleAccess}
                               onTogglePerm={togglePerm}
                               onDelete={deleteUser}

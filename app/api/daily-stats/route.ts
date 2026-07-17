@@ -24,6 +24,11 @@ export async function GET(req: NextRequest) {
   const { steps: JOURNEY_STEPS } = await getJourneyConfig();
   const clientId = await getActiveClientId();
 
+  // No published tree → return empty stats so no unscoped data leaks through.
+  if (Object.keys(JOURNEY_STEPS).length === 0 && !journey) {
+    return NextResponse.json({ dailyStats: [] });
+  }
+
   // Compose WHERE: active client + journey scope. A specific journey filters to
   // it; otherwise restrict to the published tree's journeys (matches the other
   // reports' "All Journeys" behavior) so non-published data never leaks in.

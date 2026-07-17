@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const users = await db
     .prepare(
       `SELECT u.id, u.username, u.email, u.name, u.picture, u.role, u.is_active, u.created_at,
-       u.client_id, u.permissions, (SELECT name FROM clients c WHERE c.id = u.client_id) AS client_name,
+       u.client_id, u.client_ids, u.permissions, (SELECT name FROM clients c WHERE c.id = u.client_id) AS client_name,
        (SELECT timestamp FROM login_sessions WHERE identifier = COALESCE(u.username, u.email) AND action = 'login' ORDER BY timestamp DESC LIMIT 1) AS last_login
        FROM app_users u ORDER BY u.created_at ASC`
     )

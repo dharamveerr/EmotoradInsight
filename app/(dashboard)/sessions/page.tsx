@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import useSWR from "swr";
+import { useActiveClientId } from "@/lib/useActiveClientId";
 import { usePersistentState } from "@/lib/usePersistentState";
 import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
@@ -31,7 +32,7 @@ type StepDetail = {
 // Variables to hide (internal/noise)
 const HIDDEN_VARS = new Set(["@campaign_id", "@prospectId", "@accessToken", "@first_message"]);
 
-function SessionDetail({ userId, journey, onClose }: { userId: string; journey: string; onClose: () => void }) {
+function SessionDetail({ userId, journey, onClose, syncedVars }: { userId: string; journey: string; onClose: () => void; syncedVars?: string[] | null }) {
   const { labels: JOURNEY_LABELS } = useJourneyConfig();
   const { data, isLoading } = useSWR(
     `/api/sessions?userId=${encodeURIComponent(userId)}&journey=${journey}`,
@@ -55,6 +56,9 @@ function SessionDetail({ userId, journey, onClose }: { userId: string; journey: 
             <h3 className="font-bold text-white text-base">Count Detail</h3>
             <p className="text-xs text-gray-400 mt-0.5">{JOURNEY_LABELS[journey] || journey}</p>
             <p className="text-xs text-gray-500 font-mono mt-1">📱 {userId}</p>
+            {syncedVars && syncedVars.length > 0 && (
+              <p className="text-xs text-purple-400 mt-1">Showing {syncedVars.length} synced variable{syncedVars.length !== 1 ? "s" : ""}</p>
+            )}
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white text-2xl leading-none transition ml-4">&times;</button>
         </div>
@@ -70,7 +74,8 @@ function SessionDetail({ userId, journey, onClose }: { userId: string; journey: 
           ) : (
             steps.map((s, i) => {
               const visibleVars = Object.entries(s.variables).filter(
-                ([k, v]) => !HIDDEN_VARS.has(k) && v && v !== "nan" && v !== "None"
+                ([k, v]) => !HIDDEN_VARS.has(k) && v && v !== "nan" && v !== "None" &&
+                  (syncedVars == null || syncedVars.includes(k))
               );
               const isOpen = openStep === i;
               return (
@@ -133,6 +138,10 @@ function SessionDetail({ userId, journey, onClose }: { userId: string; journey: 
 
 const toLocalDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 
+// Module-level: survives React navigation (no re-mount), but clears on page refresh.
+type SyncConfig = { vars: string[]; from: string; to: string } | null;
+let _misSyncConfig: SyncConfig = null;
+
 export default function SessionsPage() {
   const today = toLocalDate();
   const fetched = useFetchedRange();
@@ -157,6 +166,74 @@ export default function SessionsPage() {
   const [showDateFormatMenu, setShowDateFormatMenu] = useState(false);
   const [selectedJourney, setSelectedJourney] = useState<string>("all");
   const { data: dailyData } = useSWR("/api/daily-stats", fetcher);
+
+  // ── Variable Report sync ─────────────────────────────────────────────────
+  // Module-level _misSyncConfig survives React navigation but clears on refresh.
+  const clientId = useActiveClientId();
+  const [syncConfig, setSyncConfigState] = useState<SyncConfig>(_misSyncConfig);
+  const [varSyncError, setVarSyncError] = useState<string | null>(null);
+
+  function setSyncConfig(v: SyncConfig) { _misSyncConfig = v; setSyncConfigState(v); }
+  function clearSyncConfig() { _misSyncConfig = null; setSyncConfigState(null); }
+
+  const varSyncActive = syncConfig !== null;
+  const syncedVars: string[] | null = syncConfig?.vars ?? null;
+  const varReportUrl = syncConfig
+    ? `/api/variable-report?from=${syncConfig.from}&to=${syncConfig.to}`
+    : null;
+
+  const { data: varData, isLoading: varLoading } = useSWR(varReportUrl, fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+  });
+
+  const varByPhone = useMemo(() => {
+    const map = new Map<string, Record<string, string>>();
+    if (!syncConfig || !varData?.rows) return map;
+    for (const row of varData.rows as { mobile: string; variable: string; value: string }[]) {
+      if (!syncConfig.vars.includes(row.variable)) continue;
+      if (!map.has(row.mobile)) map.set(row.mobile, {});
+      map.get(row.mobile)![row.variable] = row.value;
+    }
+    return map;
+  }, [varData, syncConfig]);
+
+  const syncVarCols: string[] = syncConfig?.vars ?? [];
+
+  function handleVarSync() {
+    if (!clientId) return;
+    const cid = clientId ?? "none";
+
+    // usePersistentState wraps values as { v, t } — unwrap before use.
+    function readPersisted<T>(key: string): T | null {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { v: T; t: number };
+        return parsed?.v ?? null;
+      } catch { return null; }
+    }
+
+    const picked = readPersisted<string[]>(`filter:var-report:picked-vars:${cid}`);
+    const committed = readPersisted<{ from: string; to: string }>(`filter:var-report:committed:${cid}`);
+
+    if (!committed) {
+      setVarSyncError("No data fetched in Variable Report yet — fetch data there first.");
+      return;
+    }
+    if (!Array.isArray(picked) || picked.length === 0) {
+      setVarSyncError("No variable filter applied in Variable Report — select variables there first.");
+      return;
+    }
+    setVarSyncError(null);
+    setSyncConfig({ vars: picked, from: committed.from, to: committed.to });
+  }
+
+  function deactivateVarSync() {
+    clearSyncConfig();
+    setVarSyncError(null);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Filter daily stats by selected journey
   const filteredDailyStats = selectedJourney === "all"
@@ -256,6 +333,33 @@ export default function SessionsPage() {
           <ResetButton show={isFiltered} onClick={resetAll} />
 
           <DataRangeBadge />
+
+          {/* Sync Variable Report */}
+          {!varSyncActive ? (
+            <button
+              onClick={handleVarSync}
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 transition-all"
+              title="Sync variable columns from Variable Report"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+              </svg>
+              Sync Variable Report
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              {varLoading ? (
+                <span className="w-3 h-3 border border-purple-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+              )}
+              {varLoading ? "Syncing…" : `${syncVarCols.length} vars synced`}
+              <button onClick={deactivateVarSync} className="ml-1 hover:text-white transition">×</button>
+            </div>
+          )}
+          {varSyncError && (
+            <span className="text-xs text-red-400 max-w-xs">{varSyncError}</span>
+          )}
 
           {/* Download */}
           <div className="ml-auto flex gap-2">
@@ -411,6 +515,7 @@ export default function SessionsPage() {
           userId={selected.userId}
           journey={selected.journey}
           onClose={() => setSelected(null)}
+          syncedVars={varSyncActive ? syncedVars : null}
         />
       )}
 
