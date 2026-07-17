@@ -97,11 +97,14 @@ export default function AgentStatisticsPage() {
   const defFrom = toLocalDateString(new Date(Date.now() - 29 * 86400000));
   const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:agent-stats:from", defFrom);
   const [toDate, setToDate, resetTo] = usePersistentState("filter:agent-stats:to", today);
-  const isFiltered = fromDate !== defFrom || toDate !== today;
-  function resetRange() { resetFrom(); resetTo(); }
+  // "All time" bypasses the date range entirely — the API returns every row
+  // for the client when from/to are omitted.
+  const [allTime, setAllTime, resetAllTime] = usePersistentState("filter:agent-stats:all-time", false);
+  const isFiltered = fromDate !== defFrom || toDate !== today || allTime;
+  function resetRange() { resetFrom(); resetTo(); resetAllTime(); }
 
   const { data, isLoading, mutate } = useSWR<{ summary: Summary[]; totals: Totals; rows: Row[] }>(
-    `/api/agent-stats?from=${fromDate}&to=${toDate}`,
+    allTime ? "/api/agent-stats" : `/api/agent-stats?from=${fromDate}&to=${toDate}`,
     fetcher,
     { refreshInterval: 30000 }
   );
@@ -152,15 +155,27 @@ export default function AgentStatisticsPage() {
         {/* Controls — date range on the left, sync on the right */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">
-            <DateRangePicker
-              from={fromDate}
-              to={toDate}
-              max={today}
-              onChange={(f, t) => { setFromDate(f); setToDate(t); }}
-            />
+            <div className={allTime ? "opacity-40 pointer-events-none" : ""}>
+              <DateRangePicker
+                from={fromDate}
+                to={toDate}
+                max={today}
+                onChange={(f, t) => { setFromDate(f); setToDate(t); }}
+              />
+            </div>
+            <button
+              onClick={() => setAllTime(!allTime)}
+              className={`text-sm px-4 py-2 rounded-lg border transition-colors cursor-pointer font-semibold ${
+                allTime
+                  ? "bg-green-500/20 text-green-300 border-green-500/40"
+                  : "bg-white/10 text-gray-300 border-white/10 hover:bg-white/15"
+              }`}
+            >
+              ⏳ All Time
+            </button>
             <ResetButton show={isFiltered} onClick={resetRange} />
             <span className="text-xs text-gray-500">
-              {fromDate === toDate ? `Showing ${fromDate}` : `${fromDate} → ${toDate}`}
+              {allTime ? "Showing all-time data" : fromDate === toDate ? `Showing ${fromDate}` : `${fromDate} → ${toDate}`}
             </span>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -201,11 +216,12 @@ export default function AgentStatisticsPage() {
           </div>
         )}
 
-        {summary.length === 0 && !isLoading ? (
-          <div className="glass rounded-2xl p-10 text-center text-gray-500">
+        {summary.length === 0 && !isLoading && (
+          <div className="glass rounded-2xl p-4 text-center text-gray-500 text-sm">
             No agent data yet. Click <span className="text-green-400 font-semibold">Sync</span> to pull the latest from the source.
           </div>
-        ) : (
+        )}
+        {!isLoading && (
           <>
             {/* Charts */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
@@ -243,27 +259,32 @@ export default function AgentStatisticsPage() {
             {/* Per-agent cards */}
             <div>
               <h2 className="text-xl font-bold text-white mb-5">Per-Agent Breakdown</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                {summary.map((a, idx) => {
-                  const color = AGENT_COLORS[idx % AGENT_COLORS.length];
-                  return (
-                    <div key={a.agent_name} className="glass rounded-2xl p-6 animate-fade-in" style={{ animationDelay: `${idx * 0.08}s` }}>
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0" style={{ background: color }}>
-                          {a.agent_name.charAt(0).toUpperCase()}
+              {summary.length === 0 && (
+                <div className="glass rounded-2xl p-8 text-center text-gray-500 text-sm">No agents for this range</div>
+              )}
+              {summary.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {summary.map((a, idx) => {
+                    const color = AGENT_COLORS[idx % AGENT_COLORS.length];
+                    return (
+                      <div key={a.agent_name} className="glass rounded-2xl p-6 animate-fade-in" style={{ animationDelay: `${idx * 0.08}s` }}>
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0" style={{ background: color }}>
+                            {a.agent_name.charAt(0).toUpperCase()}
+                          </div>
+                          <h3 className="font-bold text-white text-lg truncate">{a.agent_name}</h3>
                         </div>
-                        <h3 className="font-bold text-white text-lg truncate">{a.agent_name}</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Stat label="Assignments" value={a.total_assignment} />
+                          <Stat label="Open" value={a.open} />
+                          <Stat label="User Replies" value={a.user_replies} />
+                          <Stat label="Agent Replies" value={a.agent_replies} />
+                        </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Stat label="Assignments" value={a.total_assignment} />
-                        <Stat label="Open" value={a.open} />
-                        <Stat label="User Replies" value={a.user_replies} />
-                        <Stat label="Agent Replies" value={a.agent_replies} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Detailed report — per-conversation rows */}

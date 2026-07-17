@@ -368,8 +368,9 @@ export default function CreateTreePage() {
     resetHistory();
   }
 
-  function createNewJourney() {
-    if (!selectedTree) {
+  function createNewJourney(targetTree?: Tree) {
+    const tree = targetTree ?? selectedTree;
+    if (!tree) {
       setToast({ message: "Select or create a tree first", type: "error" });
       setTimeout(() => setToast(null), 4000);
       return;
@@ -384,10 +385,12 @@ export default function CreateTreePage() {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+    setSelectedTree(tree);
     setCurrentJourney(newJourney);
     setSelectedJourneyId(null);
     setJourneyName("Untitled Journey");
     resetHistory();
+    setShowEditor(true);
   }
 
   async function loadJourney(id: string) {
@@ -848,10 +851,7 @@ export default function CreateTreePage() {
                       {/* Create journey button */}
                       <div className="p-4 pb-2">
                         <button
-                          onClick={() => {
-                            setSelectedTree(tree);
-                            createNewJourney();
-                          }}
+                          onClick={() => createNewJourney(tree)}
                           className="w-full px-3 py-2 text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all"
                         >
                           + Create Journey

@@ -107,3 +107,83 @@ export async function relabelEventsForClient(
 
   return { updated: totalUpdated };
 }
+
+/**
+ * Reconciles event step labels against what each event's metadata actually
+ * contains, for every journey in the published tree — not a one-off fix for
+ * a single journey. Two passes, applied per journey:
+ *
+ *  1. Reassign: an event tagged with the wrong step gets moved to whichever
+ *     step actually owns the one variable its metadata holds (e.g. an event
+ *     mislabeled "Intake" that carries `@budget` moves to "Budget"). Guarded
+ *     by purity — the event must not also carry another step's variable, so
+ *     genuinely ambiguous events are left alone.
+ *  2. Revert false positives: an event tagged with a step's name but whose
+ *     metadata does NOT contain that step's variable at all (e.g. a bot
+ *     "menu render" event carrying a scattered dump of many steps' option
+ *     labels, not a real single answer) is moved back to the journey's
+ *     default first step, so it stops inflating that step's count.
+ *
+ * Safe to re-run — each pass only touches events that still disagree with
+ * their metadata, so a clean dataset sees zero changes.
+ */
+export async function reconcileEventSteps(
+  clientId: string
+): Promise<{ reassigned: number; reverted: number }> {
+  const db = await getDb();
+  const varStepMap = await getVariableStepMap(clientId);
+  const { steps: JOURNEY_STEPS } = await getJourneyConfig();
+
+  const esc = (s: string) => s.replace(/'/g, "''");
+
+  // Group owned variables by journey → step, same shape as relabelEventsForClient.
+  const journeyStepVars: Record<string, Record<string, string[]>> = {};
+  for (const [varName, info] of Object.entries(varStepMap)) {
+    if (!journeyStepVars[info.journey]) journeyStepVars[info.journey] = {};
+    if (!journeyStepVars[info.journey][info.step]) journeyStepVars[info.journey][info.step] = [];
+    journeyStepVars[info.journey][info.step].push(varName);
+  }
+
+  let reassigned = 0;
+  let reverted = 0;
+
+  for (const [journeyKey, stepVarGroups] of Object.entries(journeyStepVars)) {
+    const stepEntries = Object.entries(stepVarGroups).filter(([, vars]) => vars.length > 0);
+    if (stepEntries.length === 0) continue;
+
+    const defaultStep = JOURNEY_STEPS[journeyKey]?.[0] ?? stepEntries[0][0];
+    const hasVar = (v: string) => `(metadata::jsonb -> '${esc(v)}') IS NOT NULL`;
+
+    // Pass 1 — reassign pure single-step events to their real owning step,
+    // regardless of current (possibly wrong) label.
+    for (const [step, vars] of stepEntries) {
+      const otherVars = stepEntries.filter(([s]) => s !== step).flatMap(([, v]) => v);
+      const ownVarCheck = vars.map(hasVar).join(" OR ");
+      const otherVarCheck = otherVars.length ? otherVars.map(hasVar).join(" OR ") : "FALSE";
+      const sql = `
+        UPDATE events SET step = ?
+        WHERE client_id = ? AND journey = ? AND step != ?
+          AND (${ownVarCheck})
+          AND NOT (${otherVarCheck})
+      `;
+      const result = await db.prepare(sql).run(step, clientId, journeyKey, step);
+      reassigned += result.changes ?? 0;
+    }
+
+    // Pass 2 — revert events tagged with a step name but missing that step's
+    // defining variable entirely (bot config/menu dumps, not real answers).
+    for (const [step, vars] of stepEntries) {
+      if (step === defaultStep) continue;
+      const ownVarCheck = vars.map(hasVar).join(" OR ");
+      const sql = `
+        UPDATE events SET step = ?
+        WHERE client_id = ? AND journey = ? AND step = ?
+          AND NOT (${ownVarCheck})
+      `;
+      const result = await db.prepare(sql).run(defaultStep, clientId, journeyKey, step);
+      reverted += result.changes ?? 0;
+    }
+  }
+
+  return { reassigned, reverted };
+}

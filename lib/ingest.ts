@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import getDb from "@/lib/db";
 import { mapRows, SourceRow } from "@/lib/n8n-mapping";
-import { relabelEventsForClient } from "@/lib/relabel-events";
+import { relabelEventsForClient, reconcileEventSteps } from "@/lib/relabel-events";
 
 export type IngestResult = {
   received: number;
@@ -55,6 +55,12 @@ export async function ingestRows(clientId: string, rows: SourceRow[]): Promise<I
   // published tree's friendly journey/step names (non-fatal if no tree yet).
   try {
     await relabelEventsForClient(clientId);
+    // Then reconcile every journey's step labels against what each event's
+    // metadata actually contains — catches variables that were ambiguously
+    // shared across steps at the time of the first relabel (e.g. two steps
+    // both configured with the same variable), which otherwise stay stuck
+    // under the wrong step forever once relabelEventsForClient has run once.
+    await reconcileEventSteps(clientId);
   } catch {
     // No published tree yet — events stay as-is until a tree is published.
   }

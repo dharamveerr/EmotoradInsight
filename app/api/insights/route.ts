@@ -107,10 +107,27 @@ export async function GET(req: NextRequest) {
   // ── FUNNEL ────────────────────────────────────────────────────────────
   if (type === "funnel") {
     if (!journey) {
-      const rows = await db
-        .prepare(`SELECT step, COUNT(DISTINCT userId) as count FROM events WHERE 1=1 ${dc}${cf}${js} GROUP BY step ORDER BY count DESC LIMIT 20`)
-        .all<{ step: string; count: number }>(...dp, ...cp, ...jp);
-      return NextResponse.json({ funnel: rows });
+      // Enumerate every step configured across all journeys (in their declared
+      // order) rather than grouping by whatever steps happen to have events —
+      // a step with zero data (e.g. freshly relabeled, or not yet reached)
+      // must still show up as a 0-count bar instead of silently vanishing.
+      const allKeys = Object.keys(JOURNEY_STEPS);
+      const seenSteps = new Set<string>();
+      const orderedSteps: string[] = [];
+      for (const j of allKeys) {
+        for (const step of JOURNEY_STEPS[j]) {
+          if (!seenSteps.has(step)) { seenSteps.add(step); orderedSteps.push(step); }
+        }
+      }
+      const funnel = await Promise.all(
+        orderedSteps.map(async (step) => {
+          const row = (await db
+            .prepare(`SELECT COUNT(DISTINCT userId) as count FROM events WHERE step = ? ${dc}${cf}${js}`)
+            .get<{ count: number }>(step, ...dp, ...cp, ...jp))!;
+          return { step, count: Number(row.count) };
+        })
+      );
+      return NextResponse.json({ funnel });
     }
     const steps = JOURNEY_STEPS[journey] || [];
     const funnel = await Promise.all(

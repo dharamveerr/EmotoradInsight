@@ -13,16 +13,24 @@ interface SelectGlassProps {
   onChange: (value: string) => void;
   options: Option[];
   className?: string;
+  /** Show a search box at the top of the menu to filter long option lists. */
+  searchable?: boolean;
 }
 
-export default function SelectGlass({ value, onChange, options, className = "" }: SelectGlassProps) {
+export default function SelectGlass({ value, onChange, options, className = "", searchable = false }: SelectGlassProps) {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const [mounted, setMounted] = useState(false);
+  const [search, setSearch] = useState("");
   const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLUListElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const selected = options.find((o) => o.value === value) ?? options[0];
+  const q = search.trim().toLowerCase();
+  const filteredOptions = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+
+  // Clear the search box whenever the menu closes.
+  useEffect(() => { if (!open) setSearch(""); }, [open]);
 
   // SSR guard
   useEffect(() => { setMounted(true); }, []);
@@ -66,7 +74,7 @@ export default function SelectGlass({ value, onChange, options, className = "" }
       width: r.width,
       zIndex: 9999,
       maxHeight,
-      overflowY: "auto",
+      overflowY: "hidden",
       ...(openUp ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }),
     };
   }
@@ -95,10 +103,9 @@ export default function SelectGlass({ value, onChange, options, className = "" }
   }
 
   const menu = mounted && open ? createPortal(
-    <ul
+    <div
       ref={menuRef}
-      role="listbox"
-      className="select-glass-menu rounded-xl overflow-hidden"
+      className="select-glass-menu rounded-xl overflow-hidden flex flex-col"
       style={{
         ...menuStyle,
         background: "rgba(10, 20, 40, 0.97)",
@@ -107,36 +114,52 @@ export default function SelectGlass({ value, onChange, options, className = "" }
         boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(34,197,94,0.08)",
       }}
     >
-      {options.map((opt) => {
-        const isActive = opt.value === value;
-        return (
-          <li
-            key={opt.value}
-            role="option"
-            aria-selected={isActive}
-            onClick={() => { onChange(opt.value); setOpen(false); }}
-            className="flex items-center justify-between px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors duration-100"
-            style={{
-              color: isActive ? "#22c55e" : "#cbd5e1",
-              background: isActive ? "rgba(34,197,94,0.08)" : "transparent",
-            }}
-            onMouseEnter={(e) => {
-              if (!isActive) (e.currentTarget as HTMLLIElement).style.background = "rgba(255,255,255,0.05)";
-            }}
-            onMouseLeave={(e) => {
-              if (!isActive) (e.currentTarget as HTMLLIElement).style.background = "transparent";
-            }}
-          >
-            <span>{opt.label}</span>
-            {isActive && (
-              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            )}
-          </li>
-        );
-      })}
-    </ul>,
+      {searchable && (
+        <div className="p-2 border-b border-white/10 shrink-0">
+          <input
+            autoFocus
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search…"
+            className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-green-500/40"
+          />
+        </div>
+      )}
+      <ul role="listbox" className="overflow-y-auto flex-1 min-h-0">
+        {filteredOptions.length === 0 ? (
+          <li className="px-4 py-3 text-sm text-gray-500">No matches</li>
+        ) : filteredOptions.map((opt) => {
+          const isActive = opt.value === value;
+          return (
+            <li
+              key={opt.value}
+              role="option"
+              aria-selected={isActive}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className="flex items-center justify-between px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors duration-100"
+              style={{
+                color: isActive ? "#22c55e" : "#cbd5e1",
+                background: isActive ? "rgba(34,197,94,0.08)" : "transparent",
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) (e.currentTarget as HTMLLIElement).style.background = "rgba(255,255,255,0.05)";
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) (e.currentTarget as HTMLLIElement).style.background = "transparent";
+              }}
+            >
+              <span className="truncate">{opt.label}</span>
+              {isActive && (
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>,
     document.body
   ) : null;
 

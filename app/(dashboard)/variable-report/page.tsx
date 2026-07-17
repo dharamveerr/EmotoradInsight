@@ -19,7 +19,12 @@ type Row = { mobile: string; variable: string; value: string; timestamp: string;
 type Job = { from: string; to: string; status: "pending" | "done" | "error"; count: number; error: string | null } | null;
 type PivotRow = { mobile: string; vars: Record<string, string> };
 type ValueCondition = "equals" | "contains" | "not_contains";
-type ValueFilter = { id: string; variable: string; condition: ValueCondition; value: string };
+// `touched` distinguishes "value not chosen yet" (filter inactive) from an
+// explicit pick of the "(blank)" option (filter active, matching empty values).
+// `custom` switches the value field from the dropdown of known values to a
+// free-text input, for matching values not present in the fetched data.
+type ValueFilter = { id: string; variable: string; condition: ValueCondition; value: string; touched?: boolean; custom?: boolean };
+const CUSTOM_VALUE_OPTION = "__custom__";
 
 export default function VariableReportPage() {
   const today = toLocalDateString();
@@ -154,15 +159,22 @@ export default function VariableReportPage() {
       )
     : pivotRows;
 
-  // Value filters — every condition must pass (AND). A missing value counts
-  // as an empty string, so "not contains" is true and "equals"/"contains" are false.
-  const activeValueFilters = valueFilters.filter((f) => f.variable && f.value.trim() !== "");
+  // Value filters — every condition must pass (AND). A filter is only active
+  // once the user has explicitly picked a value (including "(blank)").
+  const activeValueFilters = valueFilters.filter((f) => f.variable && f.touched);
   const pivotFiltered = activeValueFilters.length === 0
     ? searched
     : searched.filter((pr) =>
         activeValueFilters.every((f) => {
           const actual = (pr.vars[f.variable] ?? "").toLowerCase();
           const expected = f.value.trim().toLowerCase();
+          // "(blank)" means the empty value itself, not "every string contains
+          // an empty substring" — so equals/contains match only blank rows,
+          // and not_contains matches every row that actually has a value.
+          if (expected === "") {
+            const isBlank = actual === "";
+            return f.condition === "not_contains" ? !isBlank : isBlank;
+          }
           if (f.condition === "equals") return actual === expected;
           if (f.condition === "contains") return actual.includes(expected);
           return !actual.includes(expected); // not_contains
@@ -269,6 +281,7 @@ export default function VariableReportPage() {
           />
           <ValueFilterBar
             variables={variables}
+            pivotRows={pivotRows}
             filters={valueFilters}
             onChange={(f) => { setValueFilters(f); setPage(0); }}
           />
@@ -413,15 +426,33 @@ const CONDITION_LABELS: Record<ValueCondition, string> = {
 // together against the pivoted rows (e.g. @budget contains "20-30L").
 function ValueFilterBar({
   variables,
+  pivotRows,
   filters,
   onChange,
 }: {
   variables: string[];
+  pivotRows: PivotRow[];
   filters: ValueFilter[];
   onChange: (next: ValueFilter[]) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const activeCount = filters.filter((f) => f.variable && f.value.trim() !== "").length;
+
+  // Distinct values seen for a variable across all rows, sorted, with a
+  // leading "(blank)" option standing in for an empty/missing value.
+  function valueOptions(variable: string): { value: string; label: string }[] {
+    const seen = new Set<string>();
+    for (const pr of pivotRows) {
+      const v = pr.vars[variable];
+      if (v) seen.add(v);
+    }
+    const sorted = [...seen].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    return [
+      { value: "", label: "(blank)" },
+      ...sorted.map((v) => ({ value: v, label: v })),
+      { value: CUSTOM_VALUE_OPTION, label: "✎ Custom value…" },
+    ];
+  }
+  const activeCount = filters.filter((f) => f.variable && f.touched).length;
 
   function addFilter() {
     onChange([...filters, { id: `${Date.now()}-${Math.random()}`, variable: variables[0] || "", condition: "contains", value: "" }]);
@@ -467,6 +498,7 @@ function ValueFilterBar({
                       onChange={(v) => updateFilter(f.id, { variable: v })}
                       options={variables.map((v) => ({ value: v, label: v }))}
                       className="w-full"
+                      searchable
                     />
                     <SelectGlass
                       value={f.condition}
@@ -474,13 +506,39 @@ function ValueFilterBar({
                       options={(Object.keys(CONDITION_LABELS) as ValueCondition[]).map((c) => ({ value: c, label: CONDITION_LABELS[c] }))}
                       className="w-full"
                     />
-                    <input
-                      type="text"
-                      value={f.value}
-                      onChange={(e) => updateFilter(f.id, { value: e.target.value })}
-                      placeholder="value…"
-                      className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-green-500/40"
-                    />
+                    {f.custom ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={f.value}
+                          onChange={(e) => updateFilter(f.id, { value: e.target.value, touched: true })}
+                          placeholder="Type a value…"
+                          className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-green-500/40"
+                        />
+                        <button
+                          onClick={() => updateFilter(f.id, { custom: false, value: "", touched: false })}
+                          title="Back to value list"
+                          className="text-gray-500 hover:text-gray-300 transition-colors px-1 shrink-0 cursor-pointer"
+                        >
+                          ↩
+                        </button>
+                      </div>
+                    ) : (
+                      <SelectGlass
+                        value={f.value}
+                        onChange={(v) => {
+                          if (v === CUSTOM_VALUE_OPTION) {
+                            updateFilter(f.id, { custom: true, value: "", touched: false });
+                          } else {
+                            updateFilter(f.id, { value: v, touched: true });
+                          }
+                        }}
+                        options={valueOptions(f.variable)}
+                        className="w-full"
+                        searchable
+                      />
+                    )}
                   </div>
                 ))}
               </div>

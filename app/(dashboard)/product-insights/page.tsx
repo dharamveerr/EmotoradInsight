@@ -47,11 +47,14 @@ export default function ProductInsightsPage() {
     : Math.max(1, byDate.length);
 
   // Total Entries   = unique mobile numbers (distinct users)
-  // Average Entries = total interactions / days
+  // Average Entries = average of each day's unique-user count (same unit as
+  // Total Entries) — NOT total interactions/days, which counts every step
+  // event and so inflates far past what "entries" implies for multi-step journeys.
   // Drop-off        = users who started but never reached the final step
   // Conversion      = users who completed the final step
   const totalEntries = kpis.uniqueUsers;
-  const avgPerDay = Math.round(kpis.totalCount / days);
+  const sumDailyUniques = byDate.reduce((sum: number, d: { count: number }) => sum + Number(d.count), 0);
+  const avgPerDay = Math.round(sumDailyUniques / days);
   const dropRate = kpis.started > 0 ? Math.round((kpis.dropped / kpis.started) * 100) : 0;
   const convRate = kpis.started > 0 ? Math.round((kpis.completed / kpis.started) * 100) : 0;
 
