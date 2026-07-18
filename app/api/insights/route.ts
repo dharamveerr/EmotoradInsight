@@ -263,35 +263,57 @@ export async function GET(req: NextRequest) {
   }
 
   // ── DROPOFF ───────────────────────────────────────────────────────────
+  // Reuses the exact same tree-based, sequential-intersection computation as
+  // FUNNEL (rather than a raw events.step GROUP BY) so the two panels on the
+  // Drop-off Analysis page always agree — a step's "entered" count here can
+  // never exceed the step before it, and cross-journey step-name collisions
+  // are disambiguated the same way.
   if (type === "dropoff") {
-    if (!journey) {
-      const rows = await db
-        .prepare(`SELECT step, COUNT(DISTINCT userId) as entered FROM events WHERE 1=1 ${dc}${cf}${js} GROUP BY step ORDER BY entered DESC LIMIT 20`)
-        .all<{ step: string; entered: number }>(...dp, ...cp, ...jp);
-      const dropoff = rows.map((row, i) => {
-        const nextEntered = rows[i + 1]?.entered ?? 0;
-        const exited  = Math.max(0, Number(row.entered) - Number(nextEntered));
-        const dropRate = Number(row.entered) > 0 ? Math.round((exited / Number(row.entered)) * 100) : 0;
-        return { step: row.step, entered: Number(row.entered), exited, dropRate };
-      });
-      return NextResponse.json({ dropoff, journey: "all" });
+    const treeJourneys = await loadTreeJourneys();
+    const targets = journey ? treeJourneys.filter((tj) => tj.key === journey) : treeJourneys;
+    if (targets.length === 0) return NextResponse.json({ dropoff: [], journey: journey || "all" });
+    const allEvents = await loadClientEvents();
+
+    const predecessorChainByName = new Map<string, string>();
+    for (const tj of targets) {
+      let chain = "";
+      for (const step of tj.steps) {
+        const existing = predecessorChainByName.get(step.name);
+        if (existing === undefined) predecessorChainByName.set(step.name, chain);
+        else if (existing !== chain) predecessorChainByName.set(step.name, "__AMBIGUOUS__");
+        chain = chain ? `${chain}>${step.name}` : step.name;
+      }
     }
 
-    const steps = JOURNEY_STEPS[journey] || [];
-    const dropoff = await Promise.all(
-      steps.map(async (step, i) => {
-        const entered  = (await db.prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE journey = ? AND step = ? ${dc}${cf}`).get<{ c: number }>(journey, step, ...dp, ...cp))!;
-        const nextStep = steps[i + 1];
-        const nextCount = nextStep
-          ? Number(((await db.prepare(`SELECT COUNT(DISTINCT userId) as c FROM events WHERE journey = ? AND step = ? ${dc}${cf}`).get<{ c: number }>(journey, nextStep, ...dp, ...cp))!).c)
-          : 0;
-        const enteredC = Number(entered.c);
-        const exited   = enteredC - nextCount;
-        const dropRate = enteredC > 0 ? Math.round((exited / enteredC) * 100) : 0;
-        return { step, entered: enteredC, exited: exited > 0 ? exited : 0, dropRate };
-      })
-    );
-    return NextResponse.json({ dropoff, journey });
+    const stepUserSets = new Map<string, Set<string>>();
+    const stepOrder: string[] = [];
+    for (const tj of targets) {
+      let rolling: Set<string> = new Set();
+      let first = true;
+      for (const step of tj.steps) {
+        const stepSet = usersAtStep(allEvents, step);
+        rolling = first ? stepSet : new Set([...rolling].filter((u) => stepSet.has(u)));
+        first = false;
+        const ambiguous = predecessorChainByName.get(step.name) === "__AMBIGUOUS__" && targets.length > 1;
+        const label = ambiguous ? `${step.name} (${tj.name})` : step.name;
+        if (!stepUserSets.has(label)) {
+          stepUserSets.set(label, new Set());
+          stepOrder.push(label);
+        }
+        const merged = stepUserSets.get(label)!;
+        for (const u of rolling) merged.add(u);
+      }
+    }
+
+    const dropoff = stepOrder.map((name, i) => {
+      const entered = stepUserSets.get(name)!.size;
+      const nextName = stepOrder[i + 1];
+      const nextCount = nextName ? stepUserSets.get(nextName)!.size : 0;
+      const exited = Math.max(0, entered - nextCount);
+      const dropRate = entered > 0 ? Math.round((exited / entered) * 100) : 0;
+      return { step: name, entered, exited, dropRate };
+    });
+    return NextResponse.json({ dropoff, journey: journey || "all" });
   }
 
   // ── PRODUCT-ANALYTICS ─────────────────────────────────────────────────

@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from "uuid";
 const PAGE_LABELS: Record<string, string> = {
   "/": "Overview",
   "/product-insights": "Journey Insights",
-  "/journeys": "Journey Funnels",
   "/heatmap": "Time Heatmap",
   "/dropoff": "Drop-off Analysis",
   "/sessions": "MIS Report",
