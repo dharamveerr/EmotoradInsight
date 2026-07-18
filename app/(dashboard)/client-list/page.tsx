@@ -275,8 +275,9 @@ function CopyTreeModal({ clients, onClose, onSuccess }: { clients: Client[]; onC
   // Reset tree selection when source client changes.
   useEffect(() => { setTreeId(""); }, [sourceClient]);
 
-  // Show subdomain next to the name so duplicate-named clients are distinguishable.
-  const clientLabel = (c: Client) => (c.subdomain ? `${c.name} · ${c.subdomain}` : c.name);
+  // Show only the subdomain — same client name repeats across tenants, so the
+  // subdomain is what actually distinguishes them here.
+  const clientLabel = (c: Client) => c.subdomain || c.name;
   const clientOpts = clients.map((c) => ({ value: c.id, label: clientLabel(c) }));
   const treeOpts = trees.map((t) => ({ value: t.id, label: `${t.name} (${t.journey_count} journeys)` }));
   const targetOpts = clients.filter((c) => c.id !== sourceClient).map((c) => ({ value: c.id, label: clientLabel(c) }));
