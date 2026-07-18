@@ -28,8 +28,7 @@ async function readRowsFromEvents(clientId: string, from: string, to: string): P
       `SELECT userId AS "userId", journey, timestamp, metadata
        FROM events
        WHERE (timestamp)::date BETWEEN ?::date AND ?::date AND client_id = ?
-       ORDER BY timestamp DESC
-       LIMIT 20000`
+       ORDER BY timestamp DESC`
     )
     .all<{ userId: string; journey: string; timestamp: string; metadata: string | null }>(from, to, clientId);
 
