@@ -7,6 +7,7 @@ import { usePersistentState } from "@/lib/usePersistentState";
 import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import DateRangePicker from "@/components/DatePicker";
+import SelectGlass from "@/components/SelectGlass";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import TypewriterLoader from "@/components/TypewriterLoader";
 import DataRangeBadge, { useFetchedRange } from "@/components/DataRangeBadge";
@@ -145,7 +146,8 @@ let _misSyncConfig: SyncConfig = null;
 export default function SessionsPage() {
   const today = toLocalDate();
   const fetched = useFetchedRange();
-  const { labels: JOURNEY_LABELS } = useJourneyConfig();
+  const { labels: JOURNEY_LABELS, steps: JOURNEY_STEPS } = useJourneyConfig();
+  const journeyKeys = Object.keys(JOURNEY_STEPS);
   const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:sessions:from", "");
   const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:sessions:to",   "");
   const isDateFiltered = !!(fromDate && toDate);
@@ -154,9 +156,10 @@ export default function SessionsPage() {
   const sessions: SessionRow[] = data?.sessions || [];
   const [selected, setSelected] = useState<{ userId: string; journey: string } | null>(null);
   const [outcomeFilter, setOutcomeFilter, resetOutcome] = usePersistentState<"all" | "completed" | "dropped">("filter:sessions:outcome", "all");
+  const [journeyFilter, setJourneyFilter, resetJourneyFilter] = usePersistentState("filter:sessions:journey", "");
   const [search, setSearch, resetSearch] = usePersistentState("filter:sessions:search", "");
-  const isFiltered = outcomeFilter !== "all" || search !== "" || isDateFiltered;
-  function resetAll() { resetOutcome(); resetSearch(); resetFrom(); resetTo(); }
+  const isFiltered = outcomeFilter !== "all" || journeyFilter !== "" || search !== "" || isDateFiltered;
+  function resetAll() { resetOutcome(); resetJourneyFilter(); resetSearch(); resetFrom(); resetTo(); }
   const [downloading, setDownloading] = useState(false);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [showDailyOverview, setShowDailyOverview] = useState(false);
@@ -243,15 +246,16 @@ export default function SessionsPage() {
   // Extract unique journeys from daily stats
   const uniqueJourneys = Array.from(
     new Set((dailyData?.dailyStats || []).map((stat: { journey: string }) => stat.journey))
-  ).sort() as string[];
+  ).filter(Boolean).sort() as string[];
 
   const filtered = sessions.filter((s) => {
     const matchOutcome = outcomeFilter === "all" || s.outcome === outcomeFilter;
+    const matchJourney = journeyFilter === "" || s.journey === journeyFilter;
     const matchSearch = !search ||
       s.userId.includes(search) ||
       (s.name || "").toLowerCase().includes(search.toLowerCase()) ||
       JOURNEY_LABELS[s.journey]?.toLowerCase().includes(search.toLowerCase());
-    return matchOutcome && matchSearch;
+    return matchOutcome && matchJourney && matchSearch;
   });
 
   // Group sessions by date
@@ -304,6 +308,13 @@ export default function SessionsPage() {
               </button>
             ))}
           </div>
+
+          {/* Journey filter */}
+          <SelectGlass
+            value={journeyFilter}
+            onChange={setJourneyFilter}
+            options={[{ value: "", label: "All Journeys" }, ...journeyKeys.map((k) => ({ value: k, label: JOURNEY_LABELS[k] || k }))]}
+          />
 
           {/* Daily Overview Button */}
           <button
@@ -440,7 +451,6 @@ export default function SessionsPage() {
                           <thead className="bg-white/5 border-b border-white/10">
                             <tr>
                               <th className="text-left px-6 py-3 text-gray-400 font-semibold">Phone</th>
-                              <th className="text-left px-6 py-3 text-gray-400 font-semibold">Name</th>
                               <th className="text-left px-6 py-3 text-gray-400 font-semibold">Journey</th>
                               <th className="text-left px-6 py-3 text-gray-400 font-semibold">Time</th>
                               <th className="text-center px-6 py-3 text-gray-400 font-semibold">Progress</th>
@@ -452,7 +462,6 @@ export default function SessionsPage() {
                             {dateSessions.map((s, i) => (
                               <tr key={i} className="hover:bg-white/5 transition-colors">
                                 <td className="px-6 py-3 text-gray-300 font-mono text-xs">{s.userId}</td>
-                                <td className="px-6 py-3 text-gray-200 text-xs">{s.name || "—"}</td>
                                 <td className="px-6 py-3 text-gray-200 text-xs">
                                   {JOURNEY_LABELS[s.journey] || s.journey}
                                 </td>
