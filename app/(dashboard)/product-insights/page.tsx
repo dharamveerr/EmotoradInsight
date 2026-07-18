@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { usePersistentState } from "@/lib/usePersistentState";
+import { usePersistentState, useReadyAfterMount } from "@/lib/usePersistentState";
 import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
@@ -24,17 +24,22 @@ export default function ProductInsightsPage() {
   const { labels: JOURNEY_LABELS, steps: JOURNEY_STEPS } = useJourneyConfig();
   const journeyKeys = Object.keys(JOURNEY_STEPS);
   const [selectedJourney, setSelectedJourney, resetJourney] = usePersistentState("filter:product-insights:journey", "");
-  const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:product-insights:from", "");
-  const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:product-insights:to",   "");
+  // Shared with Overview/Heatmap/Drop-off/MIS — one range across report pages.
+  const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:shared:from", "");
+  const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:shared:to",   "");
   const isDateFiltered = !!(fromDate && toDate);
   const isFiltered = selectedJourney !== "" || isDateFiltered;
   function resetAll() { resetJourney(); resetFrom(); resetTo(); }
+  // Gate fetches until persisted filters have loaded — avoids a wasted first
+  // fetch with default (wrong) filters immediately followed by a real one.
+  const ready = useReadyAfterMount();
 
-  const { data, isLoading } = useSWR(
-    `/api/insights?type=product-analytics${selectedJourney ? `&journey=${selectedJourney}` : ""}${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}`,
+  const { data, isLoading: fetchLoading } = useSWR(
+    ready ? `/api/insights?type=product-analytics${selectedJourney ? `&journey=${selectedJourney}` : ""}${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}` : null,
     fetcher,
-    { refreshInterval: 30000 }
+    { refreshInterval: 120000 }
   );
+  const isLoading = !ready || fetchLoading;
 
   const byDate = data?.byDate || [];
   const byHour = data?.byHour || [];

@@ -48,7 +48,7 @@ function formatTime(iso: string) {
 
 export default function HistoryPage() {
   const { data, isLoading } = useSWR<{ history: HistoryEntry[] }>("/api/activity", fetcher, {
-    refreshInterval: 30000,
+    refreshInterval: 120000,
   });
   const [userFilter, setUserFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");

@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { usePersistentState } from "@/lib/usePersistentState";
+import { usePersistentState, useReadyAfterMount } from "@/lib/usePersistentState";
 import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
@@ -21,24 +21,47 @@ export default function DropoffPage() {
   const journeyKeys = Object.keys(JOURNEY_STEPS);
   const [journey, setJourney, resetJourney] = usePersistentState("filter:dropoff:journey", "");
   const [sortBy, setSortBy, resetSortBy] = usePersistentState<"step" | "dropRate">("filter:dropoff:sort", "step");
-  const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:dropoff:from", "");
-  const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:dropoff:to",   "");
+  // Shared with Overview/Insights/Heatmap/MIS — one range across report pages.
+  const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:shared:from", "");
+  const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:shared:to",   "");
   const isDateFiltered = !!(fromDate && toDate);
   const isFiltered = journey !== "" || sortBy !== "step" || isDateFiltered;
   function resetAll() { resetJourney(); resetSortBy(); resetFrom(); resetTo(); }
+  // Gate fetches until persisted filters have loaded — avoids a wasted first
+  // fetch with default (wrong) filters immediately followed by a real one.
+  const ready = useReadyAfterMount();
 
-  const { data, isLoading } = useSWR(
-    `/api/insights?type=dropoff${journey ? `&journey=${journey}` : ""}${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}`,
+  const { data, isLoading: fetchLoading } = useSWR(
+    ready ? `/api/insights?type=dropoff${journey ? `&journey=${journey}` : ""}${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}` : null,
     fetcher
   );
+  const isLoading = !ready || fetchLoading;
 
-  const { data: funnelData, isLoading: funnelLoading } = useSWR(
-    `/api/insights?type=funnel${journey ? `&journey=${journey}` : ""}${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}`,
+  const { data: analyticsData } = useSWR(
+    ready ? `/api/insights?type=product-analytics${journey ? `&journey=${journey}` : ""}${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}` : null,
     fetcher
   );
+  const byDate: { count: number }[] = analyticsData?.byDate || [];
+  const kpis = analyticsData?.kpis || { uniqueUsers: 0, totalCount: 0, started: 0, completed: 0, dropped: 0 };
+  // Same definitions as Journey Insights: Total/Average Entries use unique
+  // users, not raw step events (which inflate past what "entries" implies).
+  const kpiDays = fromDate && toDate
+    ? Math.max(1, Math.round((new Date(toDate).getTime() - new Date(fromDate).getTime()) / 86400000) + 1)
+    : Math.max(1, byDate.length);
+  const totalEntries = kpis.uniqueUsers;
+  const sumDailyUniques = byDate.reduce((sum, d) => sum + Number(d.count), 0);
+  const avgPerDay = Math.round(sumDailyUniques / kpiDays);
+  const kpiDropRate = kpis.started > 0 ? Math.round((kpis.dropped / kpis.started) * 100) : 0;
+  const kpiConvRate = kpis.started > 0 ? Math.round((kpis.completed / kpis.started) * 100) : 0;
+
+  const { data: funnelData, isLoading: funnelFetchLoading } = useSWR(
+    ready ? `/api/insights?type=funnel${journey ? `&journey=${journey}` : ""}${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}` : null,
+    fetcher
+  );
+  const funnelLoading = !ready || funnelFetchLoading;
 
   const { data: breakdownData } = useSWR(
-    journey
+    ready && journey
       ? `/api/insights?type=option-breakdown&journey=${journey}${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}`
       : null,
     fetcher
@@ -81,6 +104,34 @@ export default function DropoffPage() {
           <DateRangePicker from={fromDate} to={toDate} min={fetched?.from} max={fetched?.to || today} onChange={(f, t) => { setFromDate(f); setToDate(t); }} />
           <ResetButton show={isFiltered} onClick={resetAll} />
           <DataRangeBadge />
+        </div>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+          {[
+            { label: "Total Entries", value: totalEntries, icon: "👥", sub: "unique mobiles", highlight: false },
+            { label: "Average Entries", value: avgPerDay, icon: "📊", sub: "avg / day", highlight: false },
+            { label: "Drop-off Rate", value: kpis.dropped, icon: "📉", pct: `${kpiDropRate}%`, subLabel: "didn't finish", highlight: true, pctColor: "text-red-400" },
+            { label: "Conversion Rate", value: kpis.completed, icon: "✅", pct: `${kpiConvRate}%`, subLabel: "completed", highlight: true, pctColor: "text-emerald-400" },
+          ].map((kpi, i) => (
+            <div key={i} className="glass rounded-2xl p-5 animate-fade-in">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-gray-400 font-medium">{kpi.label}</p>
+                  <p className="text-3xl font-bold text-white mt-2">{kpi.value}</p>
+                  {kpi.highlight ? (
+                    <p className="text-sm font-semibold mt-1">
+                      <span className={kpi.pctColor}>{kpi.pct}</span>
+                      <span className="text-gray-400 font-normal ml-1">{kpi.subLabel}</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">{(kpi as { sub: string }).sub}</p>
+                  )}
+                </div>
+                <span className="text-2xl">{kpi.icon}</span>
+              </div>
+            </div>
+          ))}
         </div>
 
         {funnelLoading ? (

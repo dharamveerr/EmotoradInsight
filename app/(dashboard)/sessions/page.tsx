@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { usePersistentState } from "@/lib/usePersistentState";
+import { usePersistentState, useReadyAfterMount } from "@/lib/usePersistentState";
 import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import DateRangePicker from "@/components/DatePicker";
@@ -139,11 +139,20 @@ export default function SessionsPage() {
   const fetched = useFetchedRange();
   const { labels: JOURNEY_LABELS, steps: JOURNEY_STEPS } = useJourneyConfig();
   const journeyKeys = Object.keys(JOURNEY_STEPS);
-  const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:sessions:from", "");
-  const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:sessions:to",   "");
+  // Shared with Overview/Insights/Heatmap/Drop-off — one range across report pages.
+  const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:shared:from", "");
+  const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:shared:to",   "");
   const isDateFiltered = !!(fromDate && toDate);
+  // Gate the fetch until the persisted range has loaded — avoids a wasted
+  // first fetch with default (wrong) dates immediately followed by a real one.
+  const ready = useReadyAfterMount();
 
-  const { data, isLoading } = useSWR(`/api/sessions${fromDate && toDate ? `?from=${fromDate}&to=${toDate}` : ""}`, fetcher, { refreshInterval: 30000 });
+  const { data, isLoading: fetchLoading } = useSWR(
+    ready ? `/api/sessions${fromDate && toDate ? `?from=${fromDate}&to=${toDate}` : ""}` : null,
+    fetcher,
+    { refreshInterval: 120000 }
+  );
+  const isLoading = !ready || fetchLoading;
   const sessions: SessionRow[] = data?.sessions || [];
   const [selected, setSelected] = useState<{ userId: string; journey: string } | null>(null);
   const [outcomeFilter, setOutcomeFilter, resetOutcome] = usePersistentState<"all" | "completed" | "dropped">("filter:sessions:outcome", "all");

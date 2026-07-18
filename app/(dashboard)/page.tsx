@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { usePersistentState } from "@/lib/usePersistentState";
+import { usePersistentState, useReadyAfterMount } from "@/lib/usePersistentState";
 import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import DataRangeBadge, { useFetchedRange } from "@/components/DataRangeBadge";
@@ -9,7 +9,7 @@ import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import TypewriterLoader from "@/components/TypewriterLoader";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -62,16 +62,31 @@ export default function OverviewPage() {
   const today = toLocalDateString();
   const fetched = useFetchedRange();
   const { labels: JOURNEY_LABELS } = useJourneyConfig();
-  const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:overview:from", "");
-  const [toDate, setToDate, resetTo] = usePersistentState("filter:overview:to", "");
+  // Shared key: this range follows the user across Overview, Journey Insights,
+  // Time Heatmap, Drop-off Analysis and MIS Report.
+  const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:shared:from", "");
+  const [toDate, setToDate, resetTo] = usePersistentState("filter:shared:to", "");
   const isDateFiltered = !!(fromDate || toDate);
   function resetDateFilter() { resetFrom(); resetTo(); }
+  // Gate fetches until the persisted range has loaded — otherwise this fires
+  // once with empty defaults, then again once localStorage resolves.
+  const ready = useReadyAfterMount();
 
-  const { data, isLoading } = useSWR(
-    `/api/insights?type=overview&from=${fromDate}&to=${toDate}`,
+  const { data, isLoading: fetchLoading } = useSWR(
+    ready ? `/api/insights?type=overview&from=${fromDate}&to=${toDate}` : null,
     fetcher,
-    { refreshInterval: 30000 }
+    { refreshInterval: 120000 }
   );
+  const isLoading = !ready || fetchLoading;
+
+  // Same "Count by Date" data source as Journey Insights (product-analytics,
+  // all journeys combined) — shown as its own bar chart below Chatbot Reach.
+  const { data: analyticsData } = useSWR(
+    ready ? `/api/insights?type=product-analytics${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}` : null,
+    fetcher,
+    { refreshInterval: 120000 }
+  );
+  const byDate: { date: string; count: number }[] = analyticsData?.byDate || [];
 
   const journeyBreakdown = data?.journeyBreakdown || [];
   const noJourneysLive = !isLoading && Object.keys(JOURNEY_LABELS).length === 0;
@@ -181,6 +196,21 @@ export default function OverviewPage() {
               <Tooltip content={<CustomTooltip />} />
               <Area type="monotone" dataKey="count" stroke="#22c55e" strokeWidth={2.5} fill="url(#grad)" dot={{ r: 4, fill: "#22c55e", strokeWidth: 0 }} activeDot={{ r: 6, fill: "#22c55e" }} />
             </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Count by Date — same product-analytics data as Journey Insights,
+            all journeys combined. */}
+        <div className="glass rounded-2xl p-6 animate-fade-in delay-4">
+          <h2 className="font-bold text-white mb-5">Count by Date</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={byDate}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ background: "#0f1a2a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }} />
+              <Bar dataKey="count" fill="#22c55e" radius={[6, 6, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
 

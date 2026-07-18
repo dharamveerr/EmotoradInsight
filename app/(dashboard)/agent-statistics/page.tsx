@@ -6,7 +6,7 @@ import Topbar from "@/components/Topbar";
 import TypewriterLoader from "@/components/TypewriterLoader";
 import DateRangePicker from "@/components/DatePicker";
 import ResetButton from "@/components/ResetButton";
-import { usePersistentState } from "@/lib/usePersistentState";
+import { usePersistentState, useReadyAfterMount } from "@/lib/usePersistentState";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -102,12 +102,16 @@ export default function AgentStatisticsPage() {
   const [allTime, setAllTime, resetAllTime] = usePersistentState("filter:agent-stats:all-time", false);
   const isFiltered = fromDate !== defFrom || toDate !== today || allTime;
   function resetRange() { resetFrom(); resetTo(); resetAllTime(); }
+  // Gate the fetch until persisted filters have loaded — avoids a wasted
+  // first fetch with default filters immediately followed by a real one.
+  const ready = useReadyAfterMount();
 
-  const { data, isLoading, mutate } = useSWR<{ summary: Summary[]; totals: Totals; rows: Row[] }>(
-    allTime ? "/api/agent-stats" : `/api/agent-stats?from=${fromDate}&to=${toDate}`,
+  const { data, isLoading: fetchLoading, mutate } = useSWR<{ summary: Summary[]; totals: Totals; rows: Row[] }>(
+    ready ? (allTime ? "/api/agent-stats" : `/api/agent-stats?from=${fromDate}&to=${toDate}`) : null,
     fetcher,
-    { refreshInterval: 30000 }
+    { refreshInterval: 120000 }
   );
+  const isLoading = !ready || fetchLoading;
   const [syncing, setSyncing] = useState(false);
   const [detailSearch, setDetailSearch] = useState("");
   const [page, setPage] = useState(0);

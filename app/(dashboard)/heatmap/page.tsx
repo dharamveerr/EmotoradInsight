@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { usePersistentState } from "@/lib/usePersistentState";
+import { usePersistentState, useReadyAfterMount } from "@/lib/usePersistentState";
 import ResetButton from "@/components/ResetButton";
 import Topbar from "@/components/Topbar";
 import SelectGlass from "@/components/SelectGlass";
@@ -9,6 +9,9 @@ import DateRangePicker from "@/components/DatePicker";
 import { useJourneyConfig } from "@/lib/useJourneyConfig";
 import TypewriterLoader from "@/components/TypewriterLoader";
 import DataRangeBadge, { useFetchedRange } from "@/components/DataRangeBadge";
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -34,14 +37,19 @@ export default function HeatmapPage() {
   const fetched = useFetchedRange();
   const { labels: JOURNEY_LABELS, steps: JOURNEY_STEPS } = useJourneyConfig();
   const [journey, setJourney, resetJourney] = usePersistentState("filter:heatmap:journey", "");
-  const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:heatmap:from", "");
-  const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:heatmap:to",   "");
+  // Shared with Overview/Insights/Drop-off/MIS — one range across report pages.
+  const [fromDate, setFromDate, resetFrom] = usePersistentState("filter:shared:from", "");
+  const [toDate,   setToDate,   resetTo]   = usePersistentState("filter:shared:to",   "");
   const isDateFiltered = !!(fromDate && toDate);
   const isFiltered = journey !== "" || isDateFiltered;
   function resetAll() { resetJourney(); resetFrom(); resetTo(); }
+  // Gate the fetch until persisted filters have loaded — avoids a wasted
+  // first fetch with default (wrong) filters immediately followed by a real one.
+  const ready = useReadyAfterMount();
 
   const url = `/api/insights?type=heatmap${journey ? `&journey=${journey}` : ""}${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}`;
-  const { data, isLoading } = useSWR(url, fetcher);
+  const { data, isLoading: fetchLoading } = useSWR(ready ? url : null, fetcher);
+  const isLoading = !ready || fetchLoading;
 
   const cells: { day: number; hour: number; count: number }[] = data?.heatmap || [];
 
@@ -70,6 +78,11 @@ export default function HeatmapPage() {
     ? activeCells.reduce((worst, c) => (c.count < worst.count ? c : worst))
     : null;
   const cellLabel = (c: { day: number; hour: number }) => `${DAYS[c.day]}, ${formatHour(c.hour)}`;
+
+  // Chart summaries of the same grid: total events per hour (across all days)
+  // and per weekday (across all hours).
+  const byHour = HOURS.map((h) => ({ hour: h, count: grid.reduce((s, row) => s + (row[h] || 0), 0) }));
+  const byDay = DAYS.map((day, d) => ({ day, count: grid[d].reduce((s, c) => s + c, 0) }));
 
   return (
     <div className="flex-1 flex flex-col overflow-auto">
@@ -158,6 +171,32 @@ export default function HeatmapPage() {
               </div>
               <span className="text-xs text-gray-500">More</span>
             </div>
+            </div>
+
+            <div className="glass rounded-2xl p-6 animate-fade-in delay-2">
+              <h2 className="font-bold text-white mb-5">Activity by Hour</h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={byHour}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} tickFormatter={(h) => formatHour(Number(h))} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                  <Tooltip labelFormatter={(h) => formatHour(Number(h))} contentStyle={{ background: "#0f1a2a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }} />
+                  <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="glass rounded-2xl p-6 animate-fade-in delay-3">
+              <h2 className="font-bold text-white mb-5">Activity by Day</h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={byDay}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: "rgba(255,255,255,0.03)" }} contentStyle={{ background: "#0f1a2a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }} />
+                  <Bar dataKey="count" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </>
         )}

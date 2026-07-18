@@ -18,8 +18,12 @@ export type JourneyConfigClient = {
  * is published.
  */
 export function useJourneyConfig(): JourneyConfigClient {
+  // Called from nearly every dashboard page, so this is the single biggest
+  // multiplier of polling requests in the app. The published tree changes
+  // rarely (only on manual publish), so a long interval is safe — SWR still
+  // revalidates on tab focus, and any page navigation picks up fresh data.
   const { data, isLoading } = useSWR("/api/journey-config", fetcher, {
-    refreshInterval: 30000,
+    refreshInterval: 300000,
   });
 
   return {

@@ -62,3 +62,26 @@ export function usePersistentState<T>(
 
   return [value, set, reset];
 }
+
+/**
+ * True only after the component's first effect-flush pass has completed.
+ *
+ * usePersistentState above loads its stored value in a mount effect, so a
+ * page with several persisted filters (journey, date range, sort, ...) first
+ * renders with every filter at its default, then re-renders once with the
+ * real persisted values once all their mount effects have run. If a data
+ * fetch (e.g. useSWR) is wired straight to those filter values, it fires
+ * once on the default-value render and again once the real values land —
+ * two requests (and two DB round-trips) for what should be one.
+ *
+ * Call this once per page, declared AFTER every usePersistentState call, and
+ * gate fetches on it (`useSWR(ready ? url : null, fetcher)`). Its own mount
+ * effect then runs after those hooks' effects in the same flush, so `ready`
+ * flips to true in the same batched re-render that applies the real
+ * persisted values — the fetch fires exactly once, with the correct filters.
+ */
+export function useReadyAfterMount(): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  return ready;
+}
