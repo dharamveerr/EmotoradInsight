@@ -105,7 +105,7 @@ export default function ProductInsightsPage() {
         </div>
 
         {/* Trends */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           <div className="glass rounded-2xl p-6 animate-fade-in delay-1">
             <h2 className="font-bold text-white mb-5">Count by Date</h2>
             {isLoading ? (
