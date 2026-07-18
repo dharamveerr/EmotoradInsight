@@ -49,6 +49,7 @@ const journeyGroupIcon = (
 );
 
 const journeyChildren: NavItem[] = [
+  overviewItem,
   {
     href: "/product-insights",
     label: "Journey Insights",
@@ -249,7 +250,6 @@ function SidebarContent({
           // Icon-only mode: flatten everything to single icons (no room for a
           // submenu), so every page stays one click away.
           <>
-            {hasJourney && <NavLink item={overviewItem} active={pathname === overviewItem.href} collapsed onLinkClick={onLinkClick} />}
             {hasJourney && journeyChildren.map((c) => (
               <NavLink key={c.href} item={c} active={pathname === c.href} collapsed onLinkClick={onLinkClick} />
             ))}
@@ -261,8 +261,6 @@ function SidebarContent({
           </>
         ) : (
           <>
-            {hasJourney && <NavLink item={overviewItem} active={pathname === overviewItem.href} onLinkClick={onLinkClick} />}
-
             {/* Journey Insights — expandable group */}
             {hasJourney && (
               <div>
