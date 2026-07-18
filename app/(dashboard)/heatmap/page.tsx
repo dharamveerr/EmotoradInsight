@@ -23,6 +23,12 @@ function getColor(value: number, max: number): string {
 
 const toLocalDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 
+const formatHour = (h: number) => {
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}${period}`;
+};
+
 export default function HeatmapPage() {
   const today = toLocalDate();
   const fetched = useFetchedRange();
@@ -54,6 +60,17 @@ export default function HeatmapPage() {
   
   const maxVal = cells.length > 0 ? Math.max(...cells.map((c: any) => c.count || 0), 1) : 1;
 
+  // Peak = highest-activity slot; Quietest = lowest-activity slot among slots
+  // that had any activity at all (an all-zero slot isn't "reached").
+  const activeCells = cells.filter((c) => (c.count || 0) > 0);
+  const peakCell = activeCells.length
+    ? activeCells.reduce((best, c) => (c.count > best.count ? c : best))
+    : null;
+  const quietCell = activeCells.length
+    ? activeCells.reduce((worst, c) => (c.count < worst.count ? c : worst))
+    : null;
+  const cellLabel = (c: { day: number; hour: number }) => `${DAYS[c.day]}, ${formatHour(c.hour)}`;
+
   return (
     <div className="flex-1 flex flex-col overflow-auto">
       <Topbar title="Time-of-Day Heatmap" subtitle="When your users are most active" />
@@ -77,7 +94,35 @@ export default function HeatmapPage() {
         {isLoading ? (
           <div className="skeleton rounded-2xl h-80" />
         ) : (
-          <div className="glass rounded-2xl p-6 overflow-x-auto animate-fade-in delay-1">
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in">
+              <div className="glass rounded-2xl p-5 flex items-center gap-4">
+                <div className="w-11 h-11 rounded-xl bg-green-500/15 flex items-center justify-center shrink-0">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-green-400">
+                    <path d="M13 2 3 14h7l-1 8 10-12h-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Peak Activity</p>
+                  <p className="text-lg font-bold text-white">{peakCell ? cellLabel(peakCell) : "—"}</p>
+                  <p className="text-xs text-gray-500">{peakCell ? `${peakCell.count} events` : "No data"}</p>
+                </div>
+              </div>
+              <div className="glass rounded-2xl p-5 flex items-center gap-4">
+                <div className="w-11 h-11 rounded-xl bg-slate-500/15 flex items-center justify-center shrink-0">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-slate-400">
+                    <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Quietest Active Time</p>
+                  <p className="text-lg font-bold text-white">{quietCell ? cellLabel(quietCell) : "—"}</p>
+                  <p className="text-xs text-gray-500">{quietCell ? `${quietCell.count} events` : "No data"}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass rounded-2xl p-6 overflow-x-auto animate-fade-in delay-1">
             <h2 className="font-bold text-white mb-5">Activity by Day &amp; Hour</h2>
             <div className="min-w-[720px]">
               <div className="flex ml-12 mb-1.5">
@@ -113,7 +158,8 @@ export default function HeatmapPage() {
               </div>
               <span className="text-xs text-gray-500">More</span>
             </div>
-          </div>
+            </div>
+          </>
         )}
       </main>
     </div>
