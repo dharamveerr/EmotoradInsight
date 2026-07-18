@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import Topbar from "@/components/Topbar";
 import TypewriterLoader from "@/components/TypewriterLoader";
@@ -75,6 +75,19 @@ export default function VariableReportPage() {
   if (starting && job && job.status !== "pending") {
     setTimeout(() => setStarting(false), 0);
   }
+
+  // The success banner auto-hides after a few seconds instead of sticking
+  // around forever — the job's "done" status persists server-side, so
+  // without this it would keep showing on every reload/poll.
+  const [showSuccess, setShowSuccess] = useState(false);
+  useEffect(() => {
+    if (!inProgress && job?.status === "done") {
+      setShowSuccess(true);
+      const t = setTimeout(() => setShowSuccess(false), 6000);
+      return () => clearTimeout(t);
+    }
+    setShowSuccess(false);
+  }, [inProgress, job?.status, job?.count, job?.from, job?.to]);
 
   const [search, setSearch] = useState("");
   // Variable column filter. null = show all (default); an array = show exactly
@@ -269,7 +282,7 @@ export default function VariableReportPage() {
         )}
 
         {/* Success / error banner */}
-        {!inProgress && job?.status === "done" && (
+        {showSuccess && job && (
           <div className="px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-300 text-sm">
             ✓ Fetched {job.count.toLocaleString()} variable rows for {job.from === job.to ? job.from : `${job.from} → ${job.to}`}.
           </div>

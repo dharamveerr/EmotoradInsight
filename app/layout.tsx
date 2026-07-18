@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -34,11 +33,22 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        {/* Apply saved theme before paint to avoid a light/dark flash. Raw
+            inline script in <head> runs during HTML parsing, before React.
+            type is text/javascript on the server (so it executes) and
+            text/plain on the client (so React's dev warning about rendering
+            <script> tags is avoided); suppressHydrationWarning covers the
+            resulting type mismatch. */}
+        <script
+          type={typeof window === "undefined" ? "text/javascript" : "text/plain"}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light')}catch(e){}})()`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
-        {/* Apply saved theme before paint to avoid a light/dark flash. */}
-        <Script id="theme-init" strategy="beforeInteractive">
-          {`try{if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light')}catch(e){}`}
-        </Script>
         {children}
       </body>
     </html>
