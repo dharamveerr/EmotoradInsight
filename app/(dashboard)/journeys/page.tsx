@@ -34,6 +34,14 @@ export default function JourneysPage() {
     fetcher
   );
 
+  const { data: breakdownData } = useSWR(
+    selected
+      ? `/api/insights?type=option-breakdown&journey=${selected}${fromDate && toDate ? `&from=${fromDate}&to=${toDate}` : ""}`
+      : null,
+    fetcher
+  );
+  const optionSteps: { step: string; variable: string; breakdown: { value: string; count: number }[]; total: number }[] = breakdownData?.steps || [];
+
   const funnel: { step: string; count: number }[] = data?.funnel || [];
   const maxCount = funnel[0]?.count || 1;
 
@@ -102,6 +110,51 @@ export default function JourneysPage() {
             </div>
           </div>
         )}
+
+        {/* Step Response Breakdown — only meaningful for one journey at a
+            time; "All Journeys" mixes steps/variables across journeys that
+            don't share a funnel, so we point the user at picking one instead. */}
+        {!selected ? (
+          <div className="glass rounded-2xl flex flex-col items-center justify-center py-14 animate-fade-in">
+            <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mb-4">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-7 h-7 text-gray-500">
+                <path d="M9 3v18M3 9h18" />
+              </svg>
+            </div>
+            <h3 className="text-base font-semibold text-white mb-1">Select a journey to see its Step Response Breakdown</h3>
+            <p className="text-sm text-gray-500 text-center max-w-xs">Choose a specific journey above — this view only makes sense per journey, not across all journeys at once.</p>
+          </div>
+        ) : optionSteps.length > 0 ? (
+          <div className="glass rounded-2xl p-6 animate-fade-in">
+            <h2 className="font-bold text-white mb-5">Step Response Breakdown</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {optionSteps.map((s) => (
+                <div key={s.step} className="space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{s.step}</p>
+                    <p className="text-xs text-gray-500">{s.variable} · {s.total} unique users</p>
+                  </div>
+                  <div className="space-y-2">
+                    {s.breakdown.map((b) => {
+                      const pct = s.total > 0 ? Math.round((b.count / s.total) * 100) : 0;
+                      return (
+                        <div key={b.value}>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-gray-300 truncate max-w-[70%]" title={b.value}>{b.value || "(blank)"}</span>
+                            <span className="text-white font-semibold ml-2 shrink-0">{b.count} <span className="text-gray-500 font-normal">({pct}%)</span></span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                            <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </main>
     </div>
   );

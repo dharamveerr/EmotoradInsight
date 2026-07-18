@@ -8,6 +8,7 @@ import { ingestRows } from "@/lib/ingest";
 import { SourceRow } from "@/lib/n8n-mapping";
 import { denyIfNoReports } from "@/lib/permissions";
 import { startJob, finishJob, failJob, getJob } from "@/lib/variable-jobs";
+import { computeVariableAllowedUsers, type ParsedEvent } from "@/lib/journey-funnel";
 
 type ReportRow = { mobile: string; variable: string; value: string; timestamp: string; journey: string };
 
@@ -15,6 +16,11 @@ type ReportRow = { mobile: string; variable: string; value: string; timestamp: s
 // table (fast). Events are populated by the background fetch job (POST), which
 // pulls chat_log_variable via N8N and ingests it. So the display never waits on
 // the slow N8N query — it reflects whatever has been ingested so far.
+//
+// Each variable is masked to the users who sequentially completed every step
+// before the one that owns it (same rolling-intersection logic as the Funnel
+// chart) — so a step's variable can never report more users than a prior
+// step's, and Budget/etc. can never show a user who skipped MBBS Country.
 async function readRowsFromEvents(clientId: string, from: string, to: string): Promise<ReportRow[]> {
   const db = await getDb();
   const events = await db
@@ -27,11 +33,22 @@ async function readRowsFromEvents(clientId: string, from: string, to: string): P
     )
     .all<{ userId: string; journey: string; timestamp: string; metadata: string | null }>(from, to, clientId);
 
-  const rows: ReportRow[] = [];
+  const parsedEvents: ParsedEvent[] = [];
+  const metaByEvent: { userId: string; journey: string; timestamp: string; meta: Record<string, unknown> }[] = [];
   for (const e of events) {
     let meta: Record<string, unknown> = {};
     try { meta = e.metadata ? JSON.parse(e.metadata) : {}; } catch { meta = {}; }
-    for (const [k, v] of Object.entries(meta)) {
+    metaByEvent.push({ userId: e.userId, journey: e.journey, timestamp: e.timestamp, meta });
+    parsedEvents.push({ userId: e.userId, meta: meta as Record<string, string> });
+  }
+
+  const allowedByVariable = await computeVariableAllowedUsers(db, clientId, parsedEvents);
+
+  const rows: ReportRow[] = [];
+  for (const e of metaByEvent) {
+    for (const [k, v] of Object.entries(e.meta)) {
+      const allowed = allowedByVariable.get(k);
+      if (allowed && !allowed.has(e.userId)) continue; // dropped a prior step — not a real completion
       rows.push({ mobile: e.userId, variable: k, value: v == null ? "" : String(v), timestamp: e.timestamp, journey: e.journey });
     }
   }

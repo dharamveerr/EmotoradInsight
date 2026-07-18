@@ -23,7 +23,10 @@ type ValueCondition = "equals" | "contains" | "not_contains";
 // explicit pick of the "(blank)" option (filter active, matching empty values).
 // `custom` switches the value field from the dropdown of known values to a
 // free-text input, for matching values not present in the fetched data.
-type ValueFilter = { id: string; variable: string; condition: ValueCondition; value: string; touched?: boolean; custom?: boolean };
+// `join` says how this condition combines with the accumulated result of
+// every condition before it (evaluated left-to-right); ignored on the first
+// condition, which always starts the chain.
+type ValueFilter = { id: string; variable: string; condition: ValueCondition; value: string; touched?: boolean; custom?: boolean; join?: "AND" | "OR" };
 const CUSTOM_VALUE_OPTION = "__custom__";
 
 export default function VariableReportPage() {
@@ -159,26 +162,30 @@ export default function VariableReportPage() {
       )
     : pivotRows;
 
-  // Value filters — every condition must pass (AND). A filter is only active
+  // Value filters — conditions combine left-to-right using each condition's
+  // own `join` (AND/OR) against the running result, so the user can mix both
+  // within one filter set (e.g. A OR B, then AND C). A filter is only active
   // once the user has explicitly picked a value (including "(blank)").
   const activeValueFilters = valueFilters.filter((f) => f.variable && f.touched);
+  const testFilter = (f: ValueFilter, pr: PivotRow) => {
+    const actual = (pr.vars[f.variable] ?? "").toLowerCase();
+    const expected = f.value.trim().toLowerCase();
+    if (expected === "") {
+      const isBlank = actual === "";
+      return f.condition === "not_contains" ? !isBlank : isBlank;
+    }
+    if (f.condition === "equals") return actual === expected;
+    if (f.condition === "contains") return actual.includes(expected);
+    return !actual.includes(expected); // not_contains
+  };
   const pivotFiltered = activeValueFilters.length === 0
     ? searched
     : searched.filter((pr) =>
-        activeValueFilters.every((f) => {
-          const actual = (pr.vars[f.variable] ?? "").toLowerCase();
-          const expected = f.value.trim().toLowerCase();
-          // "(blank)" means the empty value itself, not "every string contains
-          // an empty substring" — so equals/contains match only blank rows,
-          // and not_contains matches every row that actually has a value.
-          if (expected === "") {
-            const isBlank = actual === "";
-            return f.condition === "not_contains" ? !isBlank : isBlank;
-          }
-          if (f.condition === "equals") return actual === expected;
-          if (f.condition === "contains") return actual.includes(expected);
-          return !actual.includes(expected); // not_contains
-        })
+        activeValueFilters.reduce<boolean | null>((acc, f) => {
+          const result = testFilter(f, pr);
+          if (acc === null) return result;
+          return f.join === "OR" ? acc || result : acc && result;
+        }, null) ?? true
       );
 
   // Apply the variable column filter. null = show every variable.
@@ -188,6 +195,7 @@ export default function VariableReportPage() {
   const pageCount = Math.max(1, Math.ceil(activeCount / PER_PAGE));
   const safePage = Math.min(page, pageCount - 1);
   const pagedPivot = pivotFiltered.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE);
+
 
   function exportCsv() {
     const esc = (s: string) => `"${String(s ?? "").replace(/"/g, '""')}"`;
@@ -220,7 +228,7 @@ export default function VariableReportPage() {
             <ResetButton show={isFiltered || hasFetched} onClick={resetRange} />
             <span className="text-xs text-gray-500">
               {hasFetched
-                ? `${committed!.from === committed!.to ? committed!.from : `${committed!.from} → ${committed!.to}`} · ${activeCount} users`
+                ? `Fetched: ${committed!.from === committed!.to ? committed!.from : `${committed!.from} → ${committed!.to}`}`
                 : "Pick a range, then click Fetch"}
             </span>
           </div>
@@ -285,6 +293,12 @@ export default function VariableReportPage() {
             filters={valueFilters}
             onChange={(f) => { setValueFilters(f); setPage(0); }}
           />
+          {hasFetched && (
+            <span className="text-sm px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-300 font-semibold whitespace-nowrap">
+              {activeCount.toLocaleString()} {activeCount === 1 ? "result" : "results"}
+              {activeValueFilters.length > 0 ? " (filtered)" : ""}
+            </span>
+          )}
           <input
             type="text"
             value={search}
@@ -455,7 +469,7 @@ function ValueFilterBar({
   const activeCount = filters.filter((f) => f.variable && f.touched).length;
 
   function addFilter() {
-    onChange([...filters, { id: `${Date.now()}-${Math.random()}`, variable: variables[0] || "", condition: "contains", value: "" }]);
+    onChange([...filters, { id: `${Date.now()}-${Math.random()}`, variable: variables[0] || "", condition: "contains", value: "", join: "AND" }]);
   }
   function updateFilter(id: string, patch: Partial<ValueFilter>) {
     onChange(filters.map((f) => (f.id === id ? { ...f, ...patch } : f)));
@@ -483,6 +497,23 @@ function ValueFilterBar({
               <div className="space-y-3 max-h-[26rem] overflow-y-auto overflow-x-hidden">
                 {filters.map((f, i) => (
                   <div key={f.id} className="flex flex-col gap-1.5 pb-3 border-b border-white/10 last:border-b-0 last:pb-0">
+                    {i > 0 && (
+                      <div className="flex items-center gap-1 self-start">
+                        {(["AND", "OR"] as const).map((j) => (
+                          <button
+                            key={j}
+                            onClick={() => updateFilter(f.id, { join: j })}
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full cursor-pointer transition-colors ${
+                              (f.join ?? "AND") === j
+                                ? "bg-green-500/25 text-green-300"
+                                : "bg-white/5 text-gray-500 hover:bg-white/10"
+                            }`}
+                          >
+                            {j}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Condition {i + 1}</span>
                       <button

@@ -79,17 +79,24 @@ export default function ProductInsightsPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { label: "Total Entries", value: totalEntries, icon: "👥", sub: "unique mobiles" },
-            { label: "Average Entries", value: avgPerDay, icon: "📊", sub: "avg / day" },
-            { label: "Drop-off Rate", value: kpis.dropped, icon: "📉", sub: `${dropRate}% didn't finish` },
-            { label: "Conversion Rate", value: kpis.completed, icon: "✅", sub: `${convRate}% completed` },
+            { label: "Total Entries", value: totalEntries, icon: "👥", sub: "unique mobiles", highlight: false },
+            { label: "Average Entries", value: avgPerDay, icon: "📊", sub: "avg / day", highlight: false },
+            { label: "Drop-off Rate", value: kpis.dropped, icon: "📉", pct: `${dropRate}%`, subLabel: "didn't finish", highlight: true, pctColor: "text-red-400" },
+            { label: "Conversion Rate", value: kpis.completed, icon: "✅", pct: `${convRate}%`, subLabel: "completed", highlight: true, pctColor: "text-emerald-400" },
           ].map((kpi, i) => (
             <div key={i} className="glass rounded-2xl p-5 animate-fade-in">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-gray-400 font-medium">{kpi.label}</p>
                   <p className="text-3xl font-bold text-white mt-2">{kpi.value}</p>
-                  {"sub" in kpi && <p className="text-xs text-gray-500 mt-1">{(kpi as { sub: string }).sub}</p>}
+                  {kpi.highlight ? (
+                    <p className="text-sm font-semibold mt-1">
+                      <span className={kpi.pctColor}>{kpi.pct}</span>
+                      <span className="text-gray-400 font-normal ml-1">{kpi.subLabel}</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">{(kpi as { sub: string }).sub}</p>
+                  )}
                 </div>
                 <span className="text-2xl">{kpi.icon}</span>
               </div>

@@ -74,6 +74,27 @@ export default function CreateTreePage() {
     if (selectedTree) swrMutate(`/api/journeys?tree_id=${selectedTree.id}`);
   }
 
+  const [relabeling, setRelabeling] = useState(false);
+
+  async function runRelabel() {
+    setRelabeling(true);
+    try {
+      const res = await fetch("/api/admin/relabel", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setToast({ message: `Relabeled ${data.updated} event(s), reassigned ${data.reassigned}, reverted ${data.reverted}`, type: "success" });
+        swrMutate("/api/trees");
+      } else {
+        setToast({ message: data.error || "Failed to fix journey data", type: "error" });
+      }
+    } catch (e) {
+      setToast({ message: `Error: ${e instanceof Error ? e.message : String(e)}`, type: "error" });
+    } finally {
+      setRelabeling(false);
+      setTimeout(() => setToast(null), 5000);
+    }
+  }
+
   async function toggleTreePublish(tree: Tree) {
     const action = tree.status === "published" ? "unpublish" : "publish";
     setTogglingTreeId(tree.id);
@@ -706,12 +727,22 @@ export default function CreateTreePage() {
                 <h2 className="text-lg font-semibold text-gray-200 mb-1">Journey Trees</h2>
                 <p className="text-sm text-gray-400">Organize and manage your chatbot journeys</p>
               </div>
-              <button
-                onClick={openCreateTreeDialog}
-                className="px-6 py-3 bg-gradient-to-r from-green-500/20 to-green-600/20 text-green-300 border border-green-500/40 rounded-lg hover:from-green-500/30 hover:to-green-600/30 transition-all font-semibold shadow-lg cursor-pointer"
-              >
-                + Create Tree
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={runRelabel}
+                  disabled={relabeling}
+                  title="Re-maps events stored under raw bot template IDs to the published tree's journey/step names — fixes 0-count funnels caused by a key mismatch"
+                  className="px-4 py-3 bg-white/5 text-gray-300 border border-white/10 rounded-lg hover:bg-white/10 transition-all font-semibold shadow-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {relabeling ? "Fixing…" : "Fix Journey Data"}
+                </button>
+                <button
+                  onClick={openCreateTreeDialog}
+                  className="px-6 py-3 bg-gradient-to-r from-green-500/20 to-green-600/20 text-green-300 border border-green-500/40 rounded-lg hover:from-green-500/30 hover:to-green-600/30 transition-all font-semibold shadow-lg cursor-pointer"
+                >
+                  + Create Tree
+                </button>
+              </div>
             </div>
 
             {/* Tree search */}

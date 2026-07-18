@@ -249,6 +249,8 @@ function OptionRow({
 function StepRow({
   step,
   level,
+  parentId,
+  index,
   variables,
   clipboard,
   onCopyVars,
@@ -259,9 +261,12 @@ function StepRow({
   onUpdateOption,
   onDeleteOption,
   onAddChildStep,
+  onReorderStep,
 }: {
   step: JourneyStep;
   level: number;
+  parentId: string | null;
+  index: number;
   variables: Variable[];
   clipboard: string[];
   onCopyVars: (ids: string[]) => void;
@@ -272,6 +277,7 @@ function StepRow({
   onUpdateOption: (stepId: string, optionId: string, updates: Partial<JourneyOption>) => void;
   onDeleteOption: (stepId: string, optionId: string) => void;
   onAddChildStep: (parentId: string) => void;
+  onReorderStep: (parentId: string | null, fromIndex: number, toIndex: number) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const children = step.children || [];
@@ -281,9 +287,41 @@ function StepRow({
   return (
     <div>
       <div
-        className="relative flex items-center gap-2 px-3 py-2 pr-[178px] hover:bg-white/5 rounded group"
+        className="relative flex items-center gap-2 px-3 py-2 pr-[178px] hover:bg-white/5 rounded group border-t-2 border-transparent"
         style={{ marginLeft: `${level * 24}px` }}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("stepreorder")) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.classList.add("border-blue-400");
+        }}
+        onDragLeave={(e) => {
+          e.currentTarget.classList.remove("border-blue-400");
+        }}
+        onDrop={(e) => {
+          const data = e.dataTransfer.getData("stepreorder");
+          if (!data) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.classList.remove("border-blue-400");
+          const { parentId: fromParentId, index: fromIndex } = JSON.parse(data);
+          if (fromParentId !== parentId || fromIndex === index) return;
+          onReorderStep(parentId, fromIndex, index);
+        }}
       >
+        <span
+          draggable
+          onDragStart={(e) => {
+            e.stopPropagation();
+            e.dataTransfer.setData("stepreorder", JSON.stringify({ parentId, index }));
+            e.dataTransfer.effectAllowed = "move";
+          }}
+          className="text-gray-600 hover:text-gray-400 cursor-grab active:cursor-grabbing shrink-0 select-none"
+          title="Drag to reorder"
+        >
+          ⠿
+        </span>
+
         <button
           onClick={() => setExpanded(!expanded)}
           className="text-gray-500 hover:text-gray-300 w-4 text-center shrink-0"
@@ -357,11 +395,13 @@ function StepRow({
           className="border-l border-purple-500/20 ml-3"
           style={{ marginLeft: `${level * 24 + 12}px` }}
         >
-          {children.map((child) => (
+          {children.map((child, childIndex) => (
             <StepRow
               key={child.id}
               step={child}
               level={level + 1}
+              parentId={step.id}
+              index={childIndex}
               variables={variables}
               clipboard={clipboard}
               onCopyVars={onCopyVars}
@@ -372,6 +412,7 @@ function StepRow({
               onUpdateOption={onUpdateOption}
               onDeleteOption={onDeleteOption}
               onAddChildStep={onAddChildStep}
+              onReorderStep={onReorderStep}
             />
           ))}
         </div>
@@ -495,6 +536,32 @@ export default function JourneyBuilder({
     };
   };
 
+  // Reorders siblings — either the top-level journey.steps array (parentId
+  // null) or a specific step's children array (parentId = that step's id).
+  const moveStepInJourney = (
+    j: Journey,
+    parentId: string | null,
+    fromIndex: number,
+    toIndex: number
+  ): Journey => {
+    const reorder = (arr: JourneyStep[]) => {
+      const copy = [...arr];
+      const [moved] = copy.splice(fromIndex, 1);
+      copy.splice(toIndex, 0, moved);
+      return copy;
+    };
+    if (parentId === null) {
+      return { ...j, steps: reorder(j.steps) };
+    }
+    return {
+      ...j,
+      steps: mapStepTree(j.steps, parentId, (s) => ({
+        ...s,
+        children: reorder(s.children || []),
+      })),
+    };
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.currentTarget.classList.add("bg-blue-500/10");
@@ -572,11 +639,13 @@ export default function JourneyBuilder({
             Drag a variable here to create first step
           </div>
         ) : (
-          journey.steps.map((step) => (
+          journey.steps.map((step, index) => (
             <StepRow
               key={step.id}
               step={step}
               level={0}
+              parentId={null}
+              index={index}
               variables={variables}
               clipboard={varClipboard}
               onCopyVars={(ids) => setVarClipboard(ids)}
@@ -600,6 +669,9 @@ export default function JourneyBuilder({
               }}
               onAddChildStep={(parentId) => {
                 onJourneyChange(addChildStepToParent(journey, parentId));
+              }}
+              onReorderStep={(parentId, fromIndex, toIndex) => {
+                onJourneyChange(moveStepInJourney(journey, parentId, fromIndex, toIndex));
               }}
             />
           ))
